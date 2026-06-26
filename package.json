@@ -1,0 +1,22 @@
+{
+  "name": "thinkerplay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A playground for interactive thinking experiments.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "preview": "vite preview --host 0.0.0.0"
+  },
+  "keywords": [
+    "visualization",
+    "interactive-learning",
+    "algorithms",
+    "ai",
+    "systems",
+    "education"
+  ],
+  "devDependencies": {
+    "vite": "^7.0.0"
+  }
+}

@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="ThinkerPlay is a playground for interactive thinking experiments."
+    />
+    <title>ThinkerPlay</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #171717;
+        --muted: #5c626a;
+        --paper: #fbfbf8;
+        --line: #ddd8cc;
+        --teal: #167f7a;
+        --red: #c34b3d;
+        --gold: #b7791f;
+        --violet: #6657a8;
+        --green: #2f7d4c;
+        --shadow: 0 18px 50px rgba(23, 23, 23, 0.09);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--paper);
+        color: var(--ink);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .page {
+        width: min(1120px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 28px 0 40px;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 0 28px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 800;
+        letter-spacing: 0;
+      }
+
+      .mark {
+        display: grid;
+        width: 34px;
+        height: 34px;
+        place-items: center;
+        border: 2px solid var(--ink);
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 4px 4px 0 var(--gold);
+      }
+
+      .nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .nav a {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 8px 12px;
+        color: var(--muted);
+        font-size: 14px;
+        text-decoration: none;
+        background: rgba(255, 255, 255, 0.7);
+      }
+
+      .intro {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 28px;
+        align-items: end;
+        padding: 34px 0 30px;
+        border-top: 1px solid var(--line);
+      }
+
+      h1 {
+        max-width: 760px;
+        margin: 0;
+        font-size: clamp(44px, 8vw, 92px);
+        line-height: 0.92;
+        letter-spacing: 0;
+      }
+
+      .intro p {
+        max-width: 660px;
+        margin: 18px 0 0;
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 1.7;
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(96px, 1fr));
+        gap: 10px;
+        min-width: 230px;
+      }
+
+      .stat {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px;
+        background: #fff;
+      }
+
+      .stat strong {
+        display: block;
+        font-size: 30px;
+        line-height: 1;
+      }
+
+      .stat span {
+        display: block;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .section-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin: 30px 0 14px;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: 20px;
+        letter-spacing: 0;
+      }
+
+      .section-title a {
+        color: var(--teal);
+        font-size: 14px;
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .card {
+        display: flex;
+        min-height: 330px;
+        flex-direction: column;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        color: inherit;
+        text-decoration: none;
+        box-shadow: var(--shadow);
+        transition:
+          transform 180ms ease,
+          box-shadow 180ms ease;
+      }
+
+      .card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 22px 60px rgba(23, 23, 23, 0.13);
+      }
+
+      .preview {
+        position: relative;
+        height: 145px;
+        overflow: hidden;
+        border-bottom: 1px solid var(--line);
+        background: #f4f4ef;
+      }
+
+      .card-body {
+        display: flex;
+        min-height: 184px;
+        flex: 1;
+        flex-direction: column;
+        padding: 16px;
+      }
+
+      .tag {
+        width: fit-content;
+        border-radius: 999px;
+        padding: 5px 8px;
+        color: #fff;
+        font-size: 12px;
+        font-weight: 800;
+        line-height: 1;
+      }
+
+      .tag.ai {
+        background: var(--teal);
+      }
+
+      .tag.systems {
+        background: var(--violet);
+      }
+
+      h3 {
+        margin: 14px 0 8px;
+        font-size: 18px;
+        line-height: 1.25;
+        letter-spacing: 0;
+      }
+
+      .card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.55;
+      }
+
+      .open {
+        margin-top: auto;
+        color: var(--teal);
+        font-size: 14px;
+        font-weight: 800;
+      }
+
+      .preview.perceptron {
+        background:
+          linear-gradient(90deg, transparent 48%, rgba(23, 23, 23, 0.18) 49%, transparent 50%),
+          linear-gradient(0deg, transparent 48%, rgba(23, 23, 23, 0.18) 49%, transparent 50%),
+          #f6f2ea;
+      }
+
+      .preview.perceptron::before {
+        content: "";
+        position: absolute;
+        inset: 28px 18px;
+        border-top: 4px solid var(--red);
+        transform: rotate(-24deg);
+      }
+
+      .dot {
+        position: absolute;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+      }
+
+      .dot.a {
+        background: var(--teal);
+      }
+
+      .dot.b {
+        background: var(--red);
+      }
+
+      .preview.cnn {
+        background:
+          linear-gradient(#d9d3c7 1px, transparent 1px),
+          linear-gradient(90deg, #d9d3c7 1px, transparent 1px),
+          #faf8f0;
+        background-size: 24px 24px;
+      }
+
+      .kernel {
+        position: absolute;
+        top: 39px;
+        left: 52px;
+        width: 72px;
+        height: 72px;
+        border: 4px solid var(--teal);
+        background: rgba(22, 127, 122, 0.13);
+        box-shadow: 78px 18px 0 rgba(183, 121, 31, 0.34);
+      }
+
+      .preview.lenet {
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr 1fr;
+        gap: 14px;
+        padding: 24px;
+        background: #f7f7f4;
+      }
+
+      .matrix {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 5px;
+        align-self: center;
+      }
+
+      .cell {
+        aspect-ratio: 1;
+        border-radius: 3px;
+        background: #ded8ca;
+      }
+
+      .cell.hot {
+        background: var(--gold);
+      }
+
+      .layer {
+        align-self: center;
+        height: 86px;
+        border-radius: 8px;
+        background: repeating-linear-gradient(
+          0deg,
+          var(--teal) 0 8px,
+          #fff 8px 13px
+        );
+      }
+
+      .preview.hdd {
+        background: #f3f3f0;
+      }
+
+      .disk {
+        position: absolute;
+        top: 18px;
+        left: 26px;
+        width: 110px;
+        height: 110px;
+        border: 14px solid #cfd0ca;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: inset 0 0 0 16px #e8e7df;
+      }
+
+      .disk::after {
+        content: "";
+        position: absolute;
+        top: 29px;
+        left: 29px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: var(--violet);
+      }
+
+      .arm {
+        position: absolute;
+        top: 55px;
+        right: 26px;
+        width: 102px;
+        height: 12px;
+        border-radius: 8px;
+        background: var(--gold);
+        transform: rotate(-20deg);
+        transform-origin: right center;
+      }
+
+      .notes {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        margin-top: 18px;
+      }
+
+      .note {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 18px;
+        background: #fff;
+      }
+
+      .note h3 {
+        margin-top: 0;
+      }
+
+      .note p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.65;
+      }
+
+      footer {
+        margin-top: 32px;
+        padding-top: 22px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      @media (max-width: 920px) {
+        .intro,
+        .notes {
+          grid-template-columns: 1fr;
+        }
+
+        .grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .stats {
+          width: min(100%, 420px);
+        }
+      }
+
+      @media (max-width: 560px) {
+        .page {
+          width: min(100% - 22px, 1120px);
+          padding-top: 14px;
+        }
+
+        .topbar {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .intro {
+          padding-top: 24px;
+        }
+
+        h1 {
+          font-size: clamp(42px, 16vw, 70px);
+        }
+
+        .intro p {
+          font-size: 16px;
+        }
+
+        .grid {
+          grid-template-columns: 1fr;
+        }
+
+        .card {
+          min-height: 300px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="topbar">
+        <a class="brand" href="./index.html" aria-label="ThinkerPlay home">
+          <span class="mark">TP</span>
+          <span>ThinkerPlay</span>
+        </a>
+        <nav class="nav" aria-label="Project links">
+          <a href="./README.md">README</a>
+          <a href="./docs/philosophy.md">Philosophy</a>
+          <a href="./docs/roadmap.md">Roadmap</a>
+          <a href="./CONTRIBUTING.md">Contribute</a>
+        </nav>
+      </header>
+
+      <section class="intro" aria-labelledby="page-title">
+        <div>
+          <h1 id="page-title">Think. Play. See.</h1>
+          <p>
+            ThinkerPlay collects small interactive experiments for AI,
+            algorithms, systems, math, and physics. Every piece is a visible
+            path from idea to intuition.
+          </p>
+        </div>
+        <div class="stats" aria-label="Project overview">
+          <div class="stat">
+            <strong>4</strong>
+            <span>current experiments</span>
+          </div>
+          <div class="stat">
+            <strong>5</strong>
+            <span>planned areas</span>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="experiments-title">
+        <div class="section-title">
+          <h2 id="experiments-title">Experiments</h2>
+          <a href="./playground/README.md">View taxonomy</a>
+        </div>
+        <div class="grid">
+          <a class="card" href="./playground/ai/perceptron/index.html">
+            <div class="preview perceptron" aria-hidden="true">
+              <span class="dot a" style="left: 34px; top: 34px"></span>
+              <span class="dot a" style="left: 68px; top: 72px"></span>
+              <span class="dot a" style="left: 96px; top: 38px"></span>
+              <span class="dot b" style="right: 38px; bottom: 38px"></span>
+              <span class="dot b" style="right: 74px; bottom: 68px"></span>
+              <span class="dot b" style="right: 98px; bottom: 28px"></span>
+            </div>
+            <div class="card-body">
+              <span class="tag ai">AI</span>
+              <h3>Perceptron Training</h3>
+              <p>Watch a linear classifier update its boundary through mistakes.</p>
+              <span class="open">Open experiment</span>
+            </div>
+          </a>
+
+          <a class="card" href="./playground/ai/cnn-kernel-pooling/index.html">
+            <div class="preview cnn" aria-hidden="true">
+              <span class="kernel"></span>
+            </div>
+            <div class="card-body">
+              <span class="tag ai">AI</span>
+              <h3>Kernel, Feature Map, Pooling</h3>
+              <p>Trace how local windows become feature maps and compressed signals.</p>
+              <span class="open">Open experiment</span>
+            </div>
+          </a>
+
+          <a class="card" href="./playground/ai/lenet5-convolution/index.html">
+            <div class="preview lenet" aria-hidden="true">
+              <div class="matrix">
+                <span class="cell"></span><span class="cell hot"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span>
+                <span class="cell"></span><span class="cell hot"></span><span class="cell hot"></span><span class="cell"></span><span class="cell"></span>
+                <span class="cell"></span><span class="cell"></span><span class="cell hot"></span><span class="cell hot"></span><span class="cell"></span>
+                <span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell hot"></span><span class="cell"></span>
+                <span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span><span class="cell"></span>
+              </div>
+              <div class="layer"></div>
+              <div class="matrix">
+                <span class="cell hot"></span><span class="cell"></span><span class="cell"></span><span class="cell hot"></span><span class="cell"></span>
+                <span class="cell"></span><span class="cell hot"></span><span class="cell"></span><span class="cell"></span><span class="cell hot"></span>
+                <span class="cell"></span><span class="cell"></span><span class="cell hot"></span><span class="cell"></span><span class="cell"></span>
+                <span class="cell hot"></span><span class="cell"></span><span class="cell"></span><span class="cell hot"></span><span class="cell"></span>
+                <span class="cell"></span><span class="cell hot"></span><span class="cell"></span><span class="cell"></span><span class="cell hot"></span>
+              </div>
+            </div>
+            <div class="card-body">
+              <span class="tag ai">AI</span>
+              <h3>LeNet-5 Convolution</h3>
+              <p>Follow matrix operations through a classic CNN architecture.</p>
+              <span class="open">Open experiment</span>
+            </div>
+          </a>
+
+          <a class="card" href="./playground/systems/hdd-3d-visualizer/index.html">
+            <div class="preview hdd" aria-hidden="true">
+              <span class="disk"></span>
+              <span class="arm"></span>
+            </div>
+            <div class="card-body">
+              <span class="tag systems">Systems</span>
+              <h3>HDD 3D Visualizer</h3>
+              <p>Explore the moving parts behind storage as an inspectable system.</p>
+              <span class="open">Open experiment</span>
+            </div>
+          </a>
+        </div>
+      </section>
+
+      <section class="notes" aria-label="Project notes">
+        <article class="note">
+          <h3>For learners</h3>
+          <p>
+            Each experiment keeps the focus on one idea, one visible process,
+            and one question that invites deeper observation.
+          </p>
+        </article>
+        <article class="note">
+          <h3>For contributors</h3>
+          <p>
+            Add a focused demo, document the thinking, and keep the entry point
+            stable with an <code>index.html</code> file.
+          </p>
+        </article>
+      </section>
+
+      <footer>
+        ThinkerPlay is a growing collection of interactive notes for curious
+        minds.
+      </footer>
+    </main>
+  </body>
+</html>

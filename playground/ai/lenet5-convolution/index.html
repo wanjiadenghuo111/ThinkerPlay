@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CNN LeNet-5的矩阵卷积过程可视化</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #7f8c8d;
+            margin-bottom: 30px;
+            font-style: italic;
+        }
+        .explanation {
+            margin-bottom: 30px;
+            line-height: 1.6;
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #3498db;
+        }
+        .visualization {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .layer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 250px;
+        }
+        .layer-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-align: center;
+            color: #2c3e50;
+        }
+        .matrix-container {
+            border: 2px solid #333;
+            padding: 5px;
+            background-color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: auto;
+            width: 240px;
+            height: 240px;
+        }
+        .matrix {
+            display: grid;
+            gap: 1px;
+        }
+        /* 输入层 (32x32) */
+        .input-matrix {
+            grid-template-columns: repeat(32, 1fr);
+            width: 320px;
+            height: 320px;
+        }
+        .input-cell {
+            width: 10px;
+            height: 10px;
+            font-size: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        /* 第一卷积层输出 (28x28) */
+        .conv1-matrix {
+            grid-template-columns: repeat(28, 1fr);
+            width: 280px;
+            height: 280px;
+        }
+        .conv1-cell {
+            width: 10px;
+            height: 10px;
+            font-size: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        /* 第一池化层输出 (14x14) */
+        .pool1-matrix {
+            grid-template-columns: repeat(14, 1fr);
+            width: 280px;
+            height: 280px;
+        }
+        .pool1-cell {
+            width: 20px;
+            height: 20px;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        /* 第二卷积层输出 (10x10) */
+        .conv2-matrix {
+            grid-template-columns: repeat(10, 1fr);
+            width: 200px;
+            height: 200px;
+        }
+        .conv2-cell {
+            width: 20px;
+            height: 20px;
+            font-size: 10px;
+            display: flex;
+                align-items: center;
+                justify-content: center;
+        }
+        /* 第二池化层输出 (5x5) */
+        .pool2-matrix {
+            grid-template-columns: repeat(5, 1fr);
+            width: 150px;
+            height: 150px;
+        }
+        .pool2-cell {
+            width: 30px;
+            height: 30px;
+            font-size: 12px;
+            display: flex;
+                align-items: center;
+                justify-content: center;
+        }
+        .cell {
+            border: 1px solid #ddd;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        .kernel-area {
+            background-color: #ffeb3b;
+            position: relative;
+            z-index: 1;
+        }
+        .kernel-center {
+            background-color: #f44336 !important;
+            color: white;
+        }
+        .pooling-area {
+            background-color: #2196f3;
+            position: relative;
+            z-index: 1;
+        }
+        .pooling-center {
+            background-color: #ff9800 !important;
+            color: white;
+        }
+        .active {
+            background-color: #4caf50;
+            color: white;
+        }
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 0 10px;
+            cursor: pointer;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        button:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
+        }
+        .info-panel {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e3f2fd;
+            border-radius: 4px;
+            border-left: 4px solid #2196f3;
+        }
+        .legend {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin: 15px 0;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+        }
+        .network-structure {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            margin: 20px 0;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .layer-node {
+            padding: 10px 15px;
+            background-color: #3498db;
+            color: white;
+            border-radius: 5px;
+            text-align: center;
+            min-width: 100px;
+        }
+        .arrow {
+            font-size: 24px;
+            color: #7f8c8d;
+        }
+        .param-info {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 14px;
+            color: #7f8c8d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CNN LeNet-5的矩阵卷积过程可视化</h1>
+        <div class="subtitle">从输入到卷积、池化等各层的详细转换过程</div>
+        
+        <div class="explanation">
+            <p>LeNet-5是Yann LeCun在1998年提出的经典卷积神经网络架构，主要用于手写数字识别。该网络包含两个卷积层和两个池化层，以及后续的全连接层。</p>
+            <p>本可视化工具展示了LeNet-5前向传播过程中，输入数据在各层之间的转换。您可以观察到：</p>
+            <ul>
+                <li>输入图像从32×32像素到各层特征图的变化</li>
+                <li>卷积核在输入上滑动的过程</li>
+                <li>池化操作如何降低特征图尺寸</li>
+                <li>各层之间的数据流动关系</li>
+            </ul>
+        </div>
+
+        <div class="network-structure">
+            <div class="layer-node">INPUT<br>32×32×1</div>
+            <div class="arrow">→</div>
+            <div class="layer-node">CONV1<br>5×5×6<br>28×28×6</div>
+            <div class="arrow">→</div>
+            <div class="layer-node">POOL1<br>2×2<br>14×14×6</div>
+            <div class="arrow">→</div>
+            <div class="layer-node">CONV2<br>5×5×16<br>10×10×16</div>
+            <div class="arrow">→</div>
+            <div class="layer-node">POOL2<br>2×2<br>5×5×16</div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #ffffff; border: 1px solid #ddd;"></div>
+                <span>输入矩阵元素</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #ffeb3b;"></div>
+                <span>卷积核覆盖区域</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #f44336; color: white;">C</div>
+                <span>当前计算中心</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #2196f3;"></div>
+                <span>池化窗口区域</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #ff9800; color: white;">P</div>
+                <span>池化中心</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #4caf50; color: white;">A</div>
+                <span>当前激活</span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="prevBtn" disabled>上一步</button>
+            <button id="nextBtn">下一步</button>
+            <button id="autoBtn">自动播放</button>
+        </div>
+
+        <div class="visualization">
+            <!-- 输入层 -->
+            <div class="layer">
+                <div class="layer-title">输入层<br>(32×32)</div>
+                <div class="matrix-container" id="inputContainer">
+                    <div class="matrix input-matrix" id="inputMatrix"></div>
+                </div>
+            </div>
+            
+            <!-- 第一卷积层 -->
+            <div class="layer">
+                <div class="layer-title">卷积层1<br>(28×28×6)</div>
+                <div class="matrix-container" id="conv1Container">
+                    <div class="matrix conv1-matrix" id="conv1Matrix"></div>
+                </div>
+                <div class="param-info">6个5×5卷积核</div>
+            </div>
+            
+            <!-- 第一池化层 -->
+            <div class="layer">
+                <div class="layer-title">池化层1<br>(14×14×6)</div>
+                <div class="matrix-container" id="pool1Container">
+                    <div class="matrix pool1-matrix" id="pool1Matrix"></div>
+                </div>
+                <div class="param-info">2×2最大池化</div>
+            </div>
+            
+            <!-- 第二卷积层 -->
+            <div class="layer">
+                <div class="layer-title">卷积层2<br>(10×10×16)</div>
+                <div class="matrix-container" id="conv2Container">
+                    <div class="matrix conv2-matrix" id="conv2Matrix"></div>
+                </div>
+                <div class="param-info">16个5×5卷积核</div>
+            </div>
+            
+            <!-- 第二池化层 -->
+            <div class="layer">
+                <div class="layer-title">池化层2<br>(5×5×16)</div>
+                <div class="matrix-container" id="pool2Container">
+                    <div class="matrix pool2-matrix" id="pool2Matrix"></div>
+                </div>
+                <div class="param-info">2×2最大池化</div>
+            </div>
+        </div>
+
+        <div class="info-panel">
+            <p id="positionInfo">当前位置: (0, 0) → 卷积1位置: (0, 0) → 池化1位置: (0, 0)</p>
+            <p id="processInfo">正在模拟LeNet-5网络中输入数据的前向传播过程...</p>
+            <p>当前步骤: <span id="stepInfo">输入层</span></p>
+        </div>
+    </div>
+
+    <script>
+        // 初始化输入矩阵 (32x32) - 模拟手写数字"3"
+        const inputMatrix = [];
+        for (let i = 0; i < 32; i++) {
+            const row = [];
+            for (let j = 0; j < 32; j++) {
+                // 创建一个模拟数字"3"的模式
+                let val = 0;
+                if ((i > 5 && i < 10 && j > 5 && j < 25) || 
+                    (i > 10 && i < 15 && j > 20 && j < 25) ||
+                    (i > 15 && i < 20 && j > 5 && j < 25) ||
+                    (i > 20 && i < 25 && j > 20 && j < 25)) {
+                    val = Math.floor(Math.random() * 5) + 5; // 数字部分
+                } else {
+                    val = Math.floor(Math.random() * 3); // 背景部分
+                }
+                row.push(val);
+            }
+            inputMatrix.push(row);
+        }
+
+        // 初始化各层特征图
+        let conv1Matrix = Array(28).fill().map(() => Array(28).fill(0));
+        let pool1Matrix = Array(14).fill().map(() => Array(14).fill(0));
+        let conv2Matrix = Array(10).fill().map(() => Array(10).fill(0));
+        let pool2Matrix = Array(5).fill().map(() => Array(5).fill(0));
+        
+        // 当前卷积核位置
+        let currentRow = 0;
+        let currentCol = 0;
+        
+        // 当前步骤
+        let currentStep = 0; // 0: 输入层, 1: 卷积1, 2: 池化1, 3: 卷积2, 4: 池化2
+        const steps = ['输入层', '卷积层1', '池化层1', '卷积层2', '池化层2'];
+        
+        // 自动播放定时器
+        let autoPlayInterval = null;
+
+        // 创建输入矩阵的HTML元素
+        function createInputMatrix() {
+            const container = document.getElementById('inputMatrix');
+            container.innerHTML = '';
+            
+            for (let i = 0; i < 32; i++) {
+                for (let j = 0; j < 32; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell input-cell';
+                    cell.textContent = inputMatrix[i][j];
+                    cell.id = `input-${i}-${j}`;
+                    container.appendChild(cell);
+                }
+            }
+        }
+
+        // 创建卷积层1的HTML元素
+        function createConv1Matrix() {
+            const container = document.getElementById('conv1Matrix');
+            container.innerHTML = '';
+            
+            for (let i = 0; i < 28; i++) {
+                for (let j = 0; j < 28; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell conv1-cell';
+                    cell.textContent = '0';
+                    cell.id = `conv1-${i}-${j}`;
+                    container.appendChild(cell);
+                }
+            }
+        }
+
+        // 创建池化层1的HTML元素
+        function createPool1Matrix() {
+            const container = document.getElementById('pool1Matrix');
+            container.innerHTML = '';
+            
+            for (let i = 0; i < 14; i++) {
+                for (let j = 0; j < 14; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell pool1-cell';
+                    cell.textContent = '0';
+                    cell.id = `pool1-${i}-${j}`;
+                    container.appendChild(cell);
+                }
+            }
+        }
+
+        // 创建卷积层2的HTML元素
+        function createConv2Matrix() {
+            const container = document.getElementById('conv2Matrix');
+            container.innerHTML = '';
+            
+            for (let i = 0; i < 10; i++) {
+                for (let j = 0; j < 10; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell conv2-cell';
+                    cell.textContent = '0';
+                    cell.id = `conv2-${i}-${j}`;
+                    container.appendChild(cell);
+                }
+            }
+        }
+
+        // 创建池化层2的HTML元素
+        function createPool2Matrix() {
+            const container = document.getElementById('pool2Matrix');
+            container.innerHTML = '';
+            
+            for (let i = 0; i < 5; i++) {
+                for (let j = 0; j < 5; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell pool2-cell';
+                    cell.textContent = '0';
+                    cell.id = `pool2-${i}-${j}`;
+                    container.appendChild(cell);
+                }
+            }
+        }
+
+        // 更新可视化显示
+        function updateVisualization() {
+            // 清除所有高亮
+            document.querySelectorAll('.kernel-area, .kernel-center, .pooling-area, .pooling-center, .active').forEach(el => {
+                el.classList.remove('kernel-area', 'kernel-center', 'pooling-area', 'pooling-center', 'active');
+            });
+
+            // 根据当前步骤更新显示
+            if (currentStep === 0) { // 输入层
+                // 高亮输入层当前区域
+                for (let i = currentRow; i < currentRow + 5 && i < 32; i++) {
+                    for (let j = currentCol; j < currentCol + 5 && j < 32; j++) {
+                        const cell = document.getElementById(`input-${i}-${j}`);
+                        if (cell) {
+                            cell.classList.add('kernel-area');
+                            if (i === currentRow + 2 && j === currentCol + 2) {
+                                cell.classList.add('kernel-center');
+                                cell.textContent = 'C';
+                            }
+                        }
+                    }
+                }
+            } 
+            else if (currentStep === 1) { // 卷积层1
+                // 高亮卷积层1当前区域
+                if (currentRow <= 27 && currentCol <= 27) {
+                    const cell = document.getElementById(`conv1-${currentRow}-${currentCol}`);
+                    if (cell) {
+                        cell.classList.add('active');
+                        cell.textContent = 'A';
+                    }
+                }
+            } 
+            else if (currentStep === 2) { // 池化层1
+                // 高亮池化层1当前区域
+                if (currentRow <= 26 && currentCol <= 26) {
+                    for (let i = currentRow; i < currentRow + 2 && i < 28; i++) {
+                        for (let j = currentCol; j < currentCol + 2 && j < 28; j++) {
+                            const cell = document.getElementById(`conv1-${i}-${j}`);
+                            if (cell) {
+                                cell.classList.add('pooling-area');
+                                if (i === currentRow && j === currentCol) {
+                                    cell.classList.add('pooling-center');
+                                    cell.textContent = 'P';
+                                }
+                            }
+                        }
+                    }
+                    
+                    const poolRow = Math.floor(currentRow / 2);
+                    const poolCol = Math.floor(currentCol / 2);
+                    if (poolRow <= 13 && poolCol <= 13) {
+                        const cell = document.getElementById(`pool1-${poolRow}-${poolCol}`);
+                        if (cell) {
+                            cell.classList.add('active');
+                            cell.textContent = 'A';
+                        }
+                    }
+                }
+            } 
+            else if (currentStep === 3) { // 卷积层2
+                // 高亮卷积层2当前区域
+                if (currentRow <= 13 && currentCol <= 13) {
+                    const poolRow = Math.floor(currentRow / 2);
+                    const poolCol = Math.floor(currentCol / 2);
+                    if (poolRow <= 6 && poolCol <= 6) {
+                        const cell = document.getElementById(`conv2-${poolRow}-${poolCol}`);
+                        if (cell) {
+                            cell.classList.add('active');
+                            cell.textContent = 'A';
+                        }
+                    }
+                }
+            } 
+            else if (currentStep === 4) { // 池化层2
+                // 高亮池化层2当前区域
+                if (currentRow <= 12 && currentCol <= 12) {
+                    const convRow = Math.floor(currentRow / 2);
+                    const convCol = Math.floor(currentCol / 2);
+                    if (convRow <= 4 && convCol <= 4) {
+                        for (let i = convRow; i < convRow + 2 && i < 10; i++) {
+                            for (let j = convCol; j < convCol + 2 && j < 10; j++) {
+                                const cell = document.getElementById(`conv2-${i}-${j}`);
+                                if (cell) {
+                                    cell.classList.add('pooling-area');
+                                    if (i === convRow && j === convCol) {
+                                        cell.classList.add('pooling-center');
+                                        cell.textContent = 'P';
+                                    }
+                                }
+                            }
+                        }
+                        
+                        const poolRow = Math.floor(convRow / 2);
+                        const poolCol = Math.floor(convCol / 2);
+                        if (poolRow <= 4 && poolCol <= 4) {
+                            const cell = document.getElementById(`pool2-${poolRow}-${poolCol}`);
+                            if (cell) {
+                                cell.classList.add('active');
+                                cell.textContent = 'A';
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 更新信息面板
+            document.getElementById('stepInfo').textContent = steps[currentStep];
+            document.getElementById('positionInfo').textContent = 
+                `步骤: ${currentStep + 1}/${steps.length} (${steps[currentStep]}) - 位置: (${currentRow}, ${currentCol})`;
+            
+            let processText = '';
+            switch(currentStep) {
+                case 0:
+                    processText = `正在模拟输入层，当前处理位置(${currentRow}, ${currentCol})`;
+                    break;
+                case 1:
+                    processText = `正在模拟卷积层1，当前处理位置(${currentRow}, ${currentCol})，生成特征图位置(0,0)`;
+                    break;
+                case 2:
+                    processText = `正在模拟池化层1，池化窗口覆盖卷积层1的(${currentRow},${currentCol})到(${currentRow+1},${currentCol+1})区域，生成池化结果位置(${Math.floor(currentRow/2)},${Math.floor(currentCol/2)})`;
+                    break;
+                case 3:
+                    processText = `正在模拟卷积层2，当前处理位置(${currentRow}, ${currentCol})，生成特征图位置(0,0)`;
+                    break;
+                case 4:
+                    processText = `正在模拟池化层2，池化窗口覆盖卷积层2的(${Math.floor(currentRow/2)},${Math.floor(currentCol/2)})到(${Math.floor(currentRow/2)+1},${Math.floor(currentCol/2)+1})区域，生成池化结果位置(${Math.floor(currentRow/4)},${Math.floor(currentCol/4)})`;
+                    break;
+            }
+            document.getElementById('processInfo').textContent = processText;
+
+            // 更新按钮状态
+            document.getElementById('prevBtn').disabled = (currentStep === 0 && currentRow === 0 && currentCol === 0);
+            document.getElementById('nextBtn').disabled = (currentStep === 4 && currentRow === 12 && currentCol === 12);
+        }
+
+        // 滚动到指定元素的中心
+        function scrollToCenter(containerId, elementId, cellSize) {
+            const container = document.getElementById(containerId);
+            const element = document.getElementById(elementId);
+            if (element && container) {
+                const elementCenterX = element.offsetLeft + cellSize / 2;
+                const elementCenterY = element.offsetTop + cellSize / 2;
+                const containerCenterX = container.clientWidth / 2;
+                const containerCenterY = container.clientHeight / 2;
+                
+                container.scrollLeft = elementCenterX - containerCenterX;
+                container.scrollTop = elementCenterY - containerCenterY;
+            }
+        }
+
+        // 下一步
+        function nextStep() {
+            if (currentStep === 0) {
+                // 在输入层，卷积核移动
+                if (currentCol < 27) {
+                    currentCol++;
+                } else if (currentRow < 27) {
+                    currentRow++;
+                    currentCol = 0;
+                } else {
+                    // 进入下一步
+                    currentStep = 1;
+                    currentRow = 0;
+                    currentCol = 0;
+                }
+            } else if (currentStep === 1) {
+                // 在卷积层1，模拟生成特征图
+                if (currentCol < 27) {
+                    currentCol++;
+                } else if (currentRow < 27) {
+                    currentRow++;
+                    currentCol = 0;
+                } else {
+                    // 进入下一步
+                    currentStep = 2;
+                    currentRow = 0;
+                    currentCol = 0;
+                }
+            } else if (currentStep === 2) {
+                // 在池化层1，模拟池化过程
+                if (currentCol < 26) {
+                    currentCol++;
+                } else if (currentRow < 26) {
+                    currentRow++;
+                    currentCol = 0;
+                } else {
+                    // 进入下一步
+                    currentStep = 3;
+                    currentRow = 0;
+                    currentCol = 0;
+                }
+            } else if (currentStep === 3) {
+                // 在卷积层2，模拟生成特征图
+                if (currentCol < 13) {
+                    currentCol++;
+                } else if (currentRow < 13) {
+                    currentRow++;
+                    currentCol = 0;
+                } else {
+                    // 进入下一步
+                    currentStep = 4;
+                    currentRow = 0;
+                    currentCol = 0;
+                }
+            } else if (currentStep === 4) {
+                // 在池化层2，模拟池化过程
+                if (currentCol < 12) {
+                    currentCol++;
+                } else if (currentRow < 12) {
+                    currentRow++;
+                    currentCol = 0;
+                }
+            }
+            
+            updateVisualization();
+        }
+
+        // 上一步
+        function prevStep() {
+            if (currentStep === 0) {
+                if (currentCol > 0) {
+                    currentCol--;
+                } else if (currentRow > 0) {
+                    currentRow--;
+                    currentCol = 27;
+                }
+            } else if (currentStep === 1) {
+                if (currentCol > 0) {
+                    currentCol--;
+                } else if (currentRow > 0) {
+                    currentRow--;
+                    currentCol = 27;
+                } else {
+                    // 返回上一步
+                    currentStep = 0;
+                    currentRow = 27;
+                    currentCol = 27;
+                }
+            } else if (currentStep === 2) {
+                if (currentCol > 0) {
+                    currentCol--;
+                } else if (currentRow > 0) {
+                    currentRow--;
+                    currentCol = 26;
+                } else {
+                    // 返回上一步
+                    currentStep = 1;
+                    currentRow = 27;
+                    currentCol = 27;
+                }
+            } else if (currentStep === 3) {
+                if (currentCol > 0) {
+                    currentCol--;
+                } else if (currentRow > 0) {
+                    currentRow--;
+                    currentCol = 13;
+                } else {
+                    // 返回上一步
+                    currentStep = 2;
+                    currentRow = 26;
+                    currentCol = 26;
+                }
+            } else if (currentStep === 4) {
+                if (currentCol > 0) {
+                    currentCol--;
+                } else if (currentRow > 0) {
+                    currentRow--;
+                    currentCol = 12;
+                } else {
+                    // 返回上一步
+                    currentStep = 3;
+                    currentRow = 13;
+                    currentCol = 13;
+                }
+            }
+            
+            updateVisualization();
+        }
+
+        // 自动播放
+        function toggleAutoPlay() {
+            const btn = document.getElementById('autoBtn');
+            if (autoPlayInterval) {
+                clearInterval(autoPlayInterval);
+                autoPlayInterval = null;
+                btn.textContent = '自动播放';
+            } else {
+                autoPlayInterval = setInterval(() => {
+                    if (currentStep === 4 && currentRow === 12 && currentCol === 12) {
+                        clearInterval(autoPlayInterval);
+                        autoPlayInterval = null;
+                        btn.textContent = '自动播放';
+                    } else {
+                        nextStep();
+                    }
+                }, 500);
+                btn.textContent = '停止播放';
+            }
+        }
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            createInputMatrix();
+            createConv1Matrix();
+            createPool1Matrix();
+            createConv2Matrix();
+            createPool2Matrix();
+            updateVisualization();
+            
+            document.getElementById('nextBtn').addEventListener('click', nextStep);
+            document.getElementById('prevBtn').addEventListener('click', prevStep);
+            document.getElementById('autoBtn').addEventListener('click', toggleAutoPlay);
+        });
+    </script>
+</body>
+</html>
+
+
+

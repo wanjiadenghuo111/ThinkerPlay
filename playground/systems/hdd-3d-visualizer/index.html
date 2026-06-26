@@ -1,0 +1,1468 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>HDD 3D 可视化</title>
+  <style>
+    body {
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #1a1a1a;
+      color: #eee;
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+    .container {
+      max-width: 1600px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: row;
+      gap: 20px;
+      align-items: flex-start;
+    }
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .log-panel {
+      width: 450px;
+      background: #222;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+      padding: 20px;
+      position: sticky;
+      top: 20px;
+      max-height: calc(100vh - 40px);
+      display: flex;
+      flex-direction: column;
+    }
+    .log-panel h3 {
+      margin-top: 0;
+      color: #fff;
+      text-align: center;
+    }
+    .log-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .log-buttons button {
+      flex: 1;
+      padding: 8px;
+      font-size: 0.9em;
+    }
+    .disk-view {
+      background: #222;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+      padding: 20px;
+      text-align: center;
+      position: relative;
+    }
+    #diskCanvas {
+      background: #000;
+      border-radius: 4px;
+      cursor: move;
+    }
+    .controls {
+      background: #222;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+      padding: 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 15px;
+    }
+    .stats {
+      background: #2c2c2c;
+      border-radius: 8px;
+      padding: 15px;
+      font-family: monospace;
+      font-size: 1.1em;
+      border: 1px solid #444;
+    }
+    button {
+      background-color: #3498db;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 5px 2px;
+      transition: background-color 0.3s;
+    }
+    button:hover {
+      background-color: #2980b9;
+    }
+    input, select {
+      padding: 8px;
+      margin: 5px 2px;
+      border: 1px solid #555;
+      border-radius: 4px;
+      background: #333;
+      color: white;
+      width: 120px;
+    }
+    label {
+      display: inline-block;
+      width: 140px;
+      text-align: right;
+      margin-right: 10px;
+    }
+    .legend {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin-top: 15px;
+      flex-wrap: wrap;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.9em;
+    }
+    .color-box {
+      width: 16px;
+      height: 16px;
+      border: 1px solid #fff;
+    }
+    .instructions {
+      text-align: center;
+      color: #aaa;
+      font-style: italic;
+      margin-top: 10px;
+    }
+    .access-mode {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+      justify-content: center;
+    }
+    .access-btn {
+      padding: 8px 15px;
+      background-color: #555;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .access-btn.active {
+      background-color: #3498db;
+    }
+    .io-process {
+      background: #2c2c2c;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+      border: 1px solid #444;
+    }
+    .io-process h3 {
+      color: #3498db;
+      margin-top: 0;
+      margin-bottom: 15px;
+      font-size: 1.2em;
+    }
+    .io-step {
+      margin: 15px 0;
+      padding: 12px;
+      background: #1a1a1a;
+      border-radius: 6px;
+      border-left: 4px solid #3498db;
+    }
+    .io-step h4 {
+      color: #2ecc71;
+      margin: 0 0 8px 0;
+      font-size: 1.1em;
+    }
+    .io-step p {
+      margin: 5px 0;
+      color: #ddd;
+      line-height: 1.6;
+    }
+    .io-step .example {
+      color: #f39c12;
+      font-style: italic;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="main-content">
+    <h1 style="text-align: center; color: #fff;">HDD 3D可视化</h1>
+    <p style="text-align: center;">展示3D盘面层叠、多磁头、CHS寻址及延迟分析，支持顺序/随机访问模式</p>
+
+    <div class="io-process">
+      <h3>📖 HDD 的 I/O 过程</h3>
+      <p style="color: #aaa; margin-bottom: 15px;">当你要读取一个扇区（由 CHS 或 LBA 指定）时，硬盘控制器会按以下步骤操作：</p>
+      
+      <div class="io-step">
+        <h4>步骤 1️⃣：磁头寻道（Seek）</h4>
+        <p>• 磁头臂移动，将读写磁头定位到目标柱面（即目标磁道所在的半径位置）。</p>
+        <p>• 这个过程需要 <strong>几毫秒</strong>（典型值：2–10 ms），取决于起始位置和目标距离。</p>
+        <p>• 此时盘片仍在高速旋转，但磁头不在正确磁道上，无法读取目标数据。</p>
+      </div>
+
+      <div class="io-step">
+        <h4>步骤 2️⃣：盘片旋转（Rotational ）</h4>
+        <p>• 磁头已停在目标磁道上方，但目标扇区可能刚转过去。</p>
+        <p>• 必须等待盘片继续旋转，直到目标扇区转到磁头正下方。</p>
+        <p>• 平均等待时间为 <strong>半圈时间</strong>，例如：</p>
+        <p class="example">  - 7200 RPM → 转一圈 = 8.33 ms → 平均旋转延迟 ≈ 4.17 ms</p>
+        <p class="example">  - 15000 RPM → 平均 ≈ 2 ms</p>
+      </div>
+
+      <div class="io-step">
+        <h4>步骤 3️⃣：数据传输（Transfer）</h4>
+        <p>• 扇区经过磁头时，数据被读出（通常只需<strong>零点几毫秒</strong>）。</p>
+        <p>• 每个盘面对应一个磁头，所有的磁头都是连在同一个磁臂上的，因此所有磁头只能“共进退”，外内圈循环移动。</p>
+        <p>• 所有盘面中相同的磁道组成柱面，按当前柱面各磁头依次点亮预读取一批扇区进行缓存，再筛选目标扇区返回给文件系统。</p>
+      </div>
+    </div>
+
+  <div class="disk-view">
+    <canvas id="diskCanvas" width="800" height="500"></canvas>
+    <div class="instructions">鼠标拖拽旋转视角 | 滚轮缩放</div>
+    <div class="legend">
+      <div class="legend-item">
+        <div class="color-box" style="background-color: #3498db;"></div>
+        <span>当前扇区</span>
+      </div>
+      <div class="legend-item">
+        <div class="color-box" style="background-color: #e74c3c;"></div>
+        <span>目标扇区</span>
+      </div>
+      <div class="legend-item">
+        <div class="color-box" style="background-color: #2ecc71;"></div>
+        <span>活动磁头</span>
+      </div>
+      <div class="legend-item">
+        <div class="color-box" style="background-color: #f39c12;"></div>
+        <span>磁头臂</span>
+      </div>
+      <div class="legend-item">
+        <div class="color-box" style="background-color: #9b59b6;"></div>
+        <span>当前柱面</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div>
+      <h3>访问模式</h3>
+      <div class="access-mode">
+        <button id="sequentialBtn" class="access-btn active">顺序访问</button>
+        <button id="randomBtn" class="access-btn">随机访问</button>
+      </div>
+      <div style="margin-top: 15px;">
+        <label>访问数量:</label>
+        <input type="number" id="accessCount" value="10000" min="1" max="100000" />
+      </div>
+      <div>
+        <button id="startAccessBtn">开始访问</button>
+        <button id="stopAccessBtn">停止访问</button>
+      </div>
+    </div>
+
+    <div>
+      <h3>位置控制</h3>
+      <div>
+        <label>当前柱面 (C):</label>
+        <input type="number" id="currentCylinder" value="0" min="0" max="10" />
+      </div>
+      <div>
+        <label>当前扇区 (S):</label>
+        <input type="number" id="currentSector" value="0" min="0" max="63" />
+      </div>
+      <div>
+        <label>当前磁头 (H):</label>
+        <input type="number" id="currentHead" value="0" min="0" max="3" />
+      </div>
+      <div>
+        <label>目标柱面 (C):</label>
+        <input type="number" id="targetCylinder" value="5" min="0" max="10" />
+      </div>
+      <div>
+        <label>目标扇区 (S):</label>
+        <input type="number" id="targetSector" value="30" min="0" max="63" />
+      </div>
+      <div>
+        <label>目标磁头 (H):</label>
+        <input type="number" id="targetHead" value="2" min="0" max="3" />
+      </div>
+      <div>
+        <button id="setTargetBtn">设置为当前目标</button>
+      </div>
+    </div>
+
+    <div>
+      <h3>磁盘参数</h3>
+      <div>
+        <label>盘面数量:</label>
+        <select id="numHeadsSelect">
+          <option value="2">2 个盘面</option>
+          <option value="3" selected>3 个盘面</option>
+          <option value="4">4 个盘面</option>
+        </select>
+      </div>
+      <div>
+        <label>柱面数量:</label>
+        <select id="numCylindersSelect">
+          <option value="4">4 个柱面</option>
+          <option value="6">6 个柱面</option>
+          <option value="10" selected>10 个柱面</option>
+        </select>
+      </div>
+      <div>
+        <label>扇区数量:</label>
+        <select id="numSectorsSelect">
+          <option value="32">32 扇区/磁道</option>
+          <option value="64" selected>64 扇区/磁道</option>
+          <option value="128">128 扇区/磁道</option>
+        </select>
+      </div>
+      <div style="margin-top: 15px;">
+        <label>转速 (RPM):</label>
+        <select id="rpmSelect">
+          <option value="3600">3600 RPM</option>
+          <option value="5400">5400 RPM</option>
+          <option value="7200">7200 RPM</option>
+          <option value="10000" selected>10000 RPM</option>
+          <option value="15000">15000 RPM</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="stats">
+    <h3>状态与延迟统计</h3>
+    <div id="status">选择访问模式并点击"开始访问"</div>
+    <div id="timeStats">总延迟: 0ms</div>
+    <div id="breakdown">寻道: 0ms | 旋转: 0ms | 磁头切换: 0ms | 读写: 0ms</div>
+    <div id="currentPos">当前位置: 柱面 0, 磁头 0, 扇区 0</div>
+    <div id="accessInfo">访问模式: 顺序 | 访问次数: 0/10</div>
+    <div id="viewAngle">视角: X=20°, Y=30°</div>
+  </div>
+
+  </div>
+
+  <div class="log-panel">
+    <h3>实时日志</h3>
+    <div id="logContainer" style="flex: 1; overflow-y: auto; font-family: monospace; font-size: 0.85em; background: #1a1a1a; padding: 10px; border-radius: 4px; min-height: 0;">
+      <div id="logContent">等待访问...</div>
+    </div>
+    <div class="log-buttons">
+      <button id="copyLogBtn">复制日志</button>
+      <button id="printLogBtn">打印日志</button>
+      <button id="clearLogBtn">清空日志</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const canvas = document.getElementById('diskCanvas');
+  const ctx = canvas.getContext('2d');
+
+  // 3D变换参数
+  let rotateX = 20 * Math.PI / 180; // 俯仰角
+  let rotateY = 30 * Math.PI / 180; // 方位角
+  let scale = 1.0;
+  let isDragging = false;
+  let lastMouseX = null;
+  let lastMouseY = null;
+
+  // 磁盘参数（可配置）
+  let numHeads = 3;
+  let numCylinders = 10;
+  let totalSectors = 64;
+  let rpm = 10000;
+  let rotationSpeed = 0.03; // 弧度/帧
+
+  // 状态
+  let currentCylinder = 0;
+  let currentSector = 0;
+  let currentHead = 0;
+  let targetCylinder = 5;
+  let targetSector = 30;
+  let targetHead = 2;
+  let rotationAngle = 0;
+  const armAngle = 0; // 磁头臂固定角度（固定指向右侧，不旋转）
+  let armRadius = 40 + currentCylinder * 15; // 磁头臂当前半径（从中心到磁头的距离，基于当前柱面）
+  let targetArmRadius = 40 + targetCylinder * 15; // 磁头臂目标半径（基于目标柱面）
+  let animationState = 'idle';
+  let seekProgress = 0;
+  let headSwitchProgress = 0;
+  let elapsed = 0;
+  let seekTime = 0;
+  let rotationTime = 0;
+  let headSwitchTime = 0;
+  let readTime = 1;
+  let totalDelay = 0;
+
+  // 访问模式相关
+  let accessMode = 'sequential'; // 'sequential' or 'random'
+  let accessCount = 10000;
+  let currentAccessIndex = 0;
+  let accessTargets = [];
+  let totalAccessTime = 0;
+  let accessStartTime = 0;
+  
+  // 磁头点亮效果相关
+  let lightingHeadIndex = -1; // 当前点亮的磁头索引，-1表示未开始点亮
+  let headLightingStartTime = 0; // 开始点亮的时间
+
+  // 日志相关
+  let logEntries = [];
+  const maxLogEntries = 100;
+
+  // 3D投影函数
+  function project3D(x, y, z) {
+    // 应用Y轴旋转
+    const x1 = x * Math.cos(rotateY) - z * Math.sin(rotateY);
+    const z1 = x * Math.sin(rotateY) + z * Math.cos(rotateY);
+    
+    // 应用X轴旋转
+    const y1 = y * Math.cos(rotateX) - z1 * Math.sin(rotateX);
+    const z2 = y * Math.sin(rotateX) + z1 * Math.cos(rotateX);
+    
+    // 透视投影
+    const distance = 500;
+    const factor = distance / (distance + z2);
+    
+    return {
+      x: (canvas.width / 2) + x1 * factor * scale,
+      y: (canvas.height / 2) + y1 * factor * scale,
+      z: z2,
+      factor: factor
+    };
+  }
+
+  // 计算磁头当前指向的扇区（基于磁头臂固定角度）
+  function getHeadSectorPosition() {
+    // 将磁头臂固定角度转换为扇区编号
+    // armAngle固定为0，需要减去rotationAngle得到相对于磁盘的角度
+    let relativeAngle = armAngle - rotationAngle;
+    // 归一化到 [0, 2π]
+    relativeAngle = ((relativeAngle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    // 转换为扇区编号
+    const sector = Math.floor((relativeAngle / (Math.PI * 2)) * totalSectors) % totalSectors;
+    return sector;
+  }
+
+  // 添加日志
+  function addLog(message, type = 'info') {
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = {
+      time: timestamp,
+      message: message,
+      type: type
+    };
+    logEntries.push(logEntry);
+    
+    // 限制日志数量
+    if (logEntries.length > maxLogEntries) {
+      logEntries.shift();
+    }
+    
+    // 更新日志显示
+    updateLogDisplay();
+  }
+
+  // 更新日志显示
+  function updateLogDisplay() {
+    const logContent = document.getElementById('logContent');
+    if (!logContent) return;
+    
+    const logHtml = logEntries.map(entry => {
+      const color = entry.type === 'target' ? '#e74c3c' : 
+                   entry.type === 'head' ? '#2ecc71' : 
+                   entry.type === 'action' ? '#f39c12' : '#eee';
+      return `<div style="color: ${color}; margin: 2px 0;">[${entry.time}] ${entry.message}</div>`;
+    }).join('');
+    
+    logContent.innerHTML = logHtml || '<div style="color: #888;">等待访问...</div>';
+    
+    // 自动滚动到底部
+    const logContainer = document.getElementById('logContainer');
+    if (logContainer) {
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+  }
+
+  // 生成访问目标
+  function generateAccessTargets() {
+    accessTargets = [];
+    
+    if (accessMode === 'sequential') {
+      // 顺序访问：从当前位置开始，依次访问后续扇区
+      let c = currentCylinder;
+      let s = currentSector;
+      let h = currentHead;
+      
+      for (let i = 0; i < accessCount; i++) {
+        accessTargets.push({
+          cylinder: c,
+          sector: s,
+          head: h
+        });
+        
+        // 顺序递增
+        s++;
+        if (s >= totalSectors) {
+          s = 0;
+          h++;
+          if (h >= numHeads) {
+            h = 0;
+            c++;
+            if (c >= numCylinders) {
+              c = 0; // 循环
+            }
+          }
+        }
+      }
+    } else {
+      // 随机访问：随机生成目标
+      for (let i = 0; i < accessCount; i++) {
+        accessTargets.push({
+          cylinder: Math.floor(Math.random() * numCylinders),
+          sector: Math.floor(Math.random() * totalSectors),
+          head: Math.floor(Math.random() * numHeads)
+        });
+      }
+    }
+  }
+
+  // 开始访问序列
+  function startAccessSequence() {
+    if (accessTargets.length === 0) {
+      generateAccessTargets();
+    }
+    
+    // 在随机模式下，accessTargets只有一个元素，currentAccessIndex表示已完成的访问次数
+    // 在顺序模式下，需要检查索引是否越界
+    if (accessMode === 'sequential' && currentAccessIndex >= accessTargets.length) {
+      currentAccessIndex = 0;
+    }
+    
+    // 在随机模式下，总是使用accessTargets[0]
+    const targetIndex = accessMode === 'random' ? 0 : currentAccessIndex;
+    const target = accessTargets[targetIndex];
+    
+    // 设置目标位置
+    targetCylinder = target.cylinder;
+    targetSector = target.sector;
+    targetHead = target.head;
+
+    addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+    const accessNumber = accessMode === 'random' ? currentAccessIndex : currentAccessIndex + 1;
+    addLog(`开始访问 #${accessNumber}/${accessCount}: 目标 C=${targetCylinder}, H=${targetHead}, S=${targetSector}`, 'target');
+    addLog(`当前位置: C=${currentCylinder}, H=${currentHead}, S=${currentSector}`, 'head');
+    
+    // 计算需要执行的操作
+    const needsSeek = currentCylinder !== targetCylinder;
+    const needsHeadSwitch = currentHead !== targetHead;
+    const needsRotation = currentSector !== targetSector;
+    
+    if (needsSeek || needsHeadSwitch || needsRotation) {
+      const operations = [];
+      if (needsSeek) operations.push(`磁头臂伸缩: C${currentCylinder}→C${targetCylinder}`);
+      if (needsHeadSwitch) operations.push(`切换磁头: H${currentHead}→H${targetHead}`);
+      if (needsRotation) operations.push(`旋转等待: S${currentSector}→S${targetSector}`);
+      addLog(`执行操作: ${operations.join(' | ')}`, 'action');
+    }
+    
+    // 磁头臂固定角度，不旋转，只能沿半径伸缩
+    // 设置磁头臂目标半径（移动到目标柱面）
+    targetArmRadius = 40 + targetCylinder * 15;
+    
+    animationState = 'seeking';
+    seekProgress = 0;
+    headSwitchProgress = 0;
+    elapsed = 0;
+    // 重置磁头点亮状态
+    lightingHeadIndex = -1;
+    headLightingStartTime = 0;
+    
+    // 计算时间
+    const sectorTime = 60000 / (rpm * totalSectors); // 每扇区旋转时间(ms)
+    seekTime = Math.abs(target.cylinder - currentCylinder) * 4;
+    rotationTime = Math.abs(target.sector - currentSector) * sectorTime;
+    headSwitchTime = Math.abs(target.head - currentHead) * 0.1;
+    
+    // 添加日志
+    addLog(`目标扇区: C=${targetCylinder}, H=${targetHead}, S=${targetSector}`, 'target');
+    addLog(`当前磁头位置: C=${currentCylinder}, H=${currentHead}, S=${currentSector}`, 'head');
+    
+    if (currentCylinder !== targetCylinder) {
+      addLog(`磁头臂伸缩: 柱面 ${currentCylinder} → ${targetCylinder}`, 'action');
+    }
+    if (currentHead !== targetHead) {
+      addLog(`切换磁头: ${currentHead} → ${targetHead}`, 'action');
+    }
+    if (currentSector !== targetSector) {
+      addLog(`旋转到扇区: ${currentSector} → ${targetSector}`, 'action');
+    }
+    
+    const displayAccessNumber = accessMode === 'random' ? currentAccessIndex : currentAccessIndex + 1;
+    document.getElementById('status').textContent = `正在访问第 ${displayAccessNumber} 个目标...`;
+    document.getElementById('accessInfo').textContent = 
+      `访问模式: ${accessMode === 'sequential' ? '顺序' : '随机'} | 访问次数: ${displayAccessNumber}/${accessCount}`;
+  }
+
+  // 绘制3D磁盘
+  function drawDisk() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // 盘面间距
+    const diskSpacing = 30;
+    
+    // 绘制所有盘面（从最远到最近，确保正确的深度排序）
+    const disks = [];
+    for (let h = 0; h < numHeads; h++) {
+      const z = (h - (numHeads-1)/2) * diskSpacing;
+      disks.push({ head: h, z: z });
+    }
+    disks.sort((a, b) => a.z - b.z); // 按Z值排序
+    
+    for (const disk of disks) {
+      const h = disk.head;
+      const z_offset = disk.z;
+      
+      // 绘制盘片圆形
+      for (let c = 0; c < numCylinders; c++) {
+        const radius = 40 + c * 15; // 内圈到外圈半径递增
+        const points = [];
+        
+        for (let i = 0; i <= 60; i++) {
+          const angle = (i / 60) * Math.PI * 2;
+          const x = Math.cos(angle) * radius;
+          const y = Math.sin(angle) * radius;
+          const projected = project3D(x, y, z_offset);
+          points.push(projected);
+        }
+        
+        // 绘制磁道圆环
+        ctx.beginPath();
+        for (let i = 0; i < points.length; i++) {
+          if (i === 0) {
+            ctx.moveTo(points[i].x, points[i].y);
+          } else {
+            ctx.lineTo(points[i].x, points[i].y);
+          }
+        }
+        ctx.closePath();
+        ctx.strokeStyle = c === currentCylinder ? '#9b59b6' : '#555';
+        ctx.lineWidth = c === currentCylinder ? 2 : 1;
+        ctx.stroke();
+      }
+      
+      // 绘制扇区
+      for (let s = 0; s < totalSectors; s++) {
+        const angle1 = (s / totalSectors) * Math.PI * 2 + rotationAngle;
+        const angle2 = ((s + 1) / totalSectors) * Math.PI * 2 + rotationAngle;
+        
+        const x1 = Math.cos(angle1) * 40; // 内半径
+        const y1 = Math.sin(angle1) * 40;
+        const x2 = Math.cos(angle1) * (40 + numCylinders * 15); // 外半径
+        const y2 = Math.sin(angle1) * (40 + numCylinders * 15);
+        
+        const p1 = project3D(x1, y1, z_offset);
+        const p2 = project3D(x2, y2, z_offset);
+        const p3 = project3D(Math.cos(angle2) * (40 + numCylinders * 15), Math.sin(angle2) * (40 + numCylinders * 15), z_offset);
+        const p4 = project3D(Math.cos(angle2) * 40, Math.sin(angle2) * 40, z_offset);
+        
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.lineTo(p3.x, p3.y);
+        ctx.lineTo(p4.x, p4.y);
+        ctx.closePath();
+        
+        // 高亮当前和目标扇区
+        if (s === currentSector && h === currentHead) {
+          ctx.fillStyle = 'rgba(52, 152, 219, 0.4)'; // 蓝色-当前
+        } else if (s === targetSector && h === targetHead) {
+          ctx.fillStyle = 'rgba(231, 76, 60, 0.4)'; // 红色-目标
+        } else {
+          ctx.fillStyle = 'rgba(100, 100, 100, 0.1)';
+        }
+        
+        ctx.fill();
+        ctx.strokeStyle = '#444';
+        ctx.stroke();
+      }
+    }
+    
+    // 绘制磁头臂（所有磁头同步，固定角度，只能沿半径伸缩）
+    // 磁头臂角度固定为0（指向右侧），不旋转，不跟随磁盘旋转
+    // 磁头臂长度 = 当前半径 + 额外长度（用于显示磁头）
+    const armExtraLength = 20; // 磁头臂超出磁道的额外长度
+    const armTipRadius = armRadius + armExtraLength; // 磁头臂末端半径
+    const armTipX = Math.cos(armAngle) * armTipRadius;
+    const armTipY = Math.sin(armAngle) * armTipRadius;
+    
+    // 磁头臂固定支撑点（在右侧，距离中心较远）
+    const armBaseRadius = 40 + numCylinders * 15 + 30; // 支撑点在磁盘外侧
+    const armBaseX = Math.cos(armAngle) * armBaseRadius;
+    const armBaseY = Math.sin(armAngle) * armBaseRadius;
+    
+    // 计算磁头当前指向的扇区位置
+    const headSector = getHeadSectorPosition();
+    
+    // 收集所有支撑点坐标，用于后续连接
+    const basePoints = [];
+    
+    for (let h = 0; h < numHeads; h++) {
+      const z = (h - (numHeads-1)/2) * diskSpacing;
+      const origin = project3D(0, 0, z);
+      const tip = project3D(armTipX, armTipY, z);
+      const base = project3D(armBaseX, armBaseY, z);
+      
+      // 保存支撑点坐标
+      basePoints.push({ x: base.x, y: base.y, z: z, head: h });
+      
+      // 绘制固定的磁头臂支撑结构（从右侧固定点到中心）
+      ctx.beginPath();
+      ctx.moveTo(base.x, base.y);
+      ctx.lineTo(origin.x, origin.y);
+      ctx.strokeStyle = h === currentHead ? '#8b4513' : '#555'; // 棕色支撑臂
+      ctx.lineWidth = h === currentHead ? 4 : 2;
+      ctx.stroke();
+      
+      // 绘制可伸缩的磁头臂（从中心到磁头位置）
+      ctx.beginPath();
+      ctx.moveTo(origin.x, origin.y);
+      ctx.lineTo(tip.x, tip.y);
+      ctx.strokeStyle = h === currentHead ? '#f39c12' : '#777';
+      ctx.lineWidth = h === currentHead ? 3 : 1;
+      ctx.stroke();
+      
+      // 绘制固定支撑点（在右侧）
+      ctx.beginPath();
+      ctx.arc(base.x, base.y, 5, 0, Math.PI * 2);
+      ctx.fillStyle = h === currentHead ? '#654321' : '#444';
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      
+      // 绘制所有磁头，根据点亮状态显示不同颜色
+      const headX = Math.cos(armAngle) * armRadius;
+      const headY = Math.sin(armAngle) * armRadius;
+      const headPos = project3D(headX, headY, z);
+      
+      // 判断当前磁头是否被点亮（在reading状态且索引小于等于lightingHeadIndex）
+      const isLighting = animationState === 'reading' && h <= lightingHeadIndex && lightingHeadIndex >= 0;
+      const isCurrentHead = h === currentHead;
+      
+      if (isCurrentHead) {
+        // 当前活动磁头，绘制较大的磁头
+        ctx.beginPath();
+        ctx.arc(headPos.x, headPos.y, 6, 0, Math.PI * 2);
+        // 如果被点亮，显示为亮黄色，否则显示为绿色
+        ctx.fillStyle = isLighting ? '#f1c40f' : '#2ecc71';
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // 如果被点亮，添加光晕效果
+        if (isLighting) {
+          ctx.beginPath();
+          ctx.arc(headPos.x, headPos.y, 10, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(241, 196, 15, 0.3)'; // 半透明黄色光晕
+          ctx.fill();
+        }
+        
+        // 绘制磁头指向的扇区标记（高亮显示）
+        const headSectorAngle = armAngle - rotationAngle;
+        const normalizedAngle = ((headSectorAngle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+        const sectorIndex = Math.floor((normalizedAngle / (Math.PI * 2)) * totalSectors) % totalSectors;
+        
+        // 在当前柱面的目标扇区位置绘制标记
+        const sectorAngle = (sectorIndex / totalSectors) * Math.PI * 2 + rotationAngle;
+        const sectorX = Math.cos(sectorAngle) * armRadius;
+        const sectorY = Math.sin(sectorAngle) * armRadius;
+        const sectorPos = project3D(sectorX, sectorY, z);
+        
+        ctx.beginPath();
+        ctx.arc(sectorPos.x, sectorPos.y, 8, 0, Math.PI * 2);
+        ctx.fillStyle = isLighting ? 'rgba(241, 196, 15, 0.6)' : 'rgba(46, 204, 113, 0.6)'; // 点亮时显示黄色，否则绿色
+        ctx.fill();
+        ctx.strokeStyle = isLighting ? '#f1c40f' : '#2ecc71';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      } else {
+        // 非当前磁头，绘制较小的磁头标记
+        ctx.beginPath();
+        ctx.arc(headPos.x, headPos.y, 4, 0, Math.PI * 2);
+        // 如果被点亮，显示为亮黄色，否则显示为灰色
+        ctx.fillStyle = isLighting ? '#f1c40f' : '#888';
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        
+        // 如果被点亮，添加光晕效果
+        if (isLighting) {
+          ctx.beginPath();
+          ctx.arc(headPos.x, headPos.y, 8, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(241, 196, 15, 0.3)'; // 半透明黄色光晕
+          ctx.fill();
+        }
+      }
+    }
+    
+    // 连接所有支撑点，形成统一的支撑框架
+    if (basePoints.length > 1) {
+      // 按Z坐标排序，从后到前绘制连接线
+      basePoints.sort((a, b) => a.z - b.z);
+      
+      // 绘制垂直连接线（连接相邻盘面的支撑点）
+      for (let i = 0; i < basePoints.length - 1; i++) {
+        const p1 = basePoints[i];
+        const p2 = basePoints[i + 1];
+        
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.strokeStyle = '#654321'; // 深棕色连接线
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+      
+      // 在顶部和底部添加横向加强条（让结构更稳固）
+      if (basePoints.length >= 2) {
+        const topPoint = basePoints[0];
+        const bottomPoint = basePoints[basePoints.length - 1];
+        
+        // 顶部横向加强条（稍微向外延伸）
+        const topBarX1 = topPoint.x - 15;
+        const topBarY1 = topPoint.y;
+        const topBarX2 = topPoint.x + 15;
+        const topBarY2 = topPoint.y;
+        
+        ctx.beginPath();
+        ctx.moveTo(topBarX1, topBarY1);
+        ctx.lineTo(topBarX2, topBarY2);
+        ctx.strokeStyle = '#654321';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        
+        // 底部横向加强条
+        const bottomBarX1 = bottomPoint.x - 15;
+        const bottomBarY1 = bottomPoint.y;
+        const bottomBarX2 = bottomPoint.x + 15;
+        const bottomBarY2 = bottomPoint.y;
+        
+        ctx.beginPath();
+        ctx.moveTo(bottomBarX1, bottomBarY1);
+        ctx.lineTo(bottomBarX2, bottomBarY2);
+        ctx.strokeStyle = '#654321';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+      }
+    }
+    
+    // 标记目标扇区位置（如果与当前磁头位置不同）
+    if (targetCylinder !== currentCylinder || targetSector !== currentSector || targetHead !== currentHead) {
+      const targetRadius = 40 + targetCylinder * 15;
+      const targetSectorAngle = (targetSector / totalSectors) * Math.PI * 2 + rotationAngle;
+      const targetX = Math.cos(targetSectorAngle) * targetRadius;
+      const targetY = Math.sin(targetSectorAngle) * targetRadius;
+      const targetZ = (targetHead - (numHeads-1)/2) * diskSpacing;
+      const targetPos = project3D(targetX, targetY, targetZ);
+      
+      ctx.beginPath();
+      ctx.arc(targetPos.x, targetPos.y, 9, 0, Math.PI * 2);
+      ctx.fillStyle = '#e74c3c';
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  }
+
+  // 动画循环
+  function animate() {
+    // 磁盘持续旋转（独立于磁头臂）
+    rotationAngle += rotationSpeed * 0.3;
+    
+    // 磁头臂保持固定角度（armAngle = 0），不旋转，只能沿半径伸缩
+    // 磁头臂半径方向移动（伸缩到目标柱面）
+    const targetRadius = 40 + targetCylinder * 15;
+    targetArmRadius = targetRadius;
+    
+    // 平滑移动到目标半径
+    const radiusMoveSpeed = 0.1;
+    const radiusDiff = targetArmRadius - armRadius;
+    const oldCylinder = currentCylinder;
+    if (Math.abs(radiusDiff) > 0.5) {
+      armRadius += radiusDiff * radiusMoveSpeed;
+      // 根据半径计算当前柱面
+      const calculatedCylinder = Math.round((armRadius - 40) / 15);
+      if (calculatedCylinder !== currentCylinder && calculatedCylinder >= 0 && calculatedCylinder < numCylinders) {
+        currentCylinder = calculatedCylinder;
+        // 柱面变化时添加日志
+        if (elapsed % 10 === 0) {
+          addLog(`磁头臂伸缩中: 柱面 ${oldCylinder} → ${currentCylinder} (半径: ${armRadius.toFixed(1)})`, 'action');
+        }
+      }
+    } else {
+      armRadius = targetArmRadius;
+      // 更新当前柱面位置
+      if (currentCylinder !== targetCylinder) {
+        currentCylinder = targetCylinder;
+        addLog(`磁头臂已到达目标柱面 ${currentCylinder}`, 'action');
+      }
+    }
+    
+    // 更新当前扇区位置（基于磁头臂角度）
+    const oldSector = currentSector;
+    currentSector = getHeadSectorPosition();
+    
+    if (animationState === 'idle') {
+      // 空闲状态，磁头臂保持当前位置
+      // 检查是否需要切换到目标磁头（当用户设置新目标时）
+      if (currentHead !== targetHead) {
+        const oldHead = currentHead;
+        currentHead = targetHead;
+        addLog(`空闲状态 - 磁头切换: ${oldHead} → ${currentHead}`, 'head');
+      }
+      
+      // 只在柱面或磁头变化时输出日志（扇区旋转太频繁，不输出）
+      const lastIdleLog = logEntries.filter(e => e.type === 'head' && e.message.includes('空闲状态')).slice(-1)[0];
+      if (lastIdleLog) {
+        // 提取上次的C和H值
+        const lastMatch = lastIdleLog.message.match(/C=(\d+), H=(\d+)/);
+        if (lastMatch) {
+          const lastC = parseInt(lastMatch[1]);
+          const lastH = parseInt(lastMatch[2]);
+          // 只在C或H变化时输出
+          if (currentCylinder !== lastC || currentHead !== lastH) {
+            addLog(`空闲状态 - 当前磁头: C=${currentCylinder}, H=${currentHead}, S=${currentSector}`, 'head');
+          }
+        }
+      } else {
+        // 第一次输出
+        if (elapsed % 60 === 0) {
+          addLog(`空闲状态 - 当前磁头: C=${currentCylinder}, H=${currentHead}, S=${currentSector}`, 'head');
+        }
+      }
+    } else if (animationState === 'seeking') {
+      // 寻道过程：磁头臂沿半径方向移动到目标柱面
+      // 确保寻道步骤至少执行一次，即使柱面相同也要先完成寻道确认
+      const needsActualSeek = currentCylinder !== targetCylinder;
+      if (needsActualSeek) {
+        // 需要实际移动：平滑移动到目标柱面
+        seekProgress += 0.02;
+      } else {
+        // 柱面相同：快速完成寻道确认（但仍需要完成这个步骤）
+        seekProgress += 0.1; // 更快完成，但仍需要几帧
+      }
+      
+      if (seekProgress >= 1) {
+        seekProgress = 1;
+        currentCylinder = targetCylinder;
+        armRadius = 40 + targetCylinder * 15;
+        targetArmRadius = armRadius;
+        
+        // 添加日志：柱面到达（先完成寻道）
+        if (needsActualSeek) {
+          addLog(`✓ 寻道完成: 已到达柱面 ${currentCylinder}`, 'action');
+        } else {
+          addLog(`✓ 寻道确认: 已在目标柱面 ${currentCylinder}`, 'action');
+        }
+        
+        // 寻道完成后，再等待旋转（先寻道，再旋转）
+        if (currentHead !== targetHead) {
+          animationState = 'switching_head';
+          headSwitchProgress = 0;
+          elapsed = 0;
+          addLog(`→ 开始切换磁头: ${currentHead} → ${targetHead}`, 'action');
+          addLog(`切换前状态: C=${currentCylinder}, H=${currentHead}, S=${currentSector}`, 'info');
+        } else {
+          // 寻道完成后，再进入旋转等待
+          animationState = 'rotating';
+          elapsed = 0;
+          addLog(`→ 寻道完成，开始旋转等待扇区: 当前S=${currentSector}, 目标S=${targetSector}`, 'action');
+        }
+      } else {
+        // 平滑移动到目标柱面
+        const currentTargetRadius = 40 + targetCylinder * 15;
+        const startRadius = 40 + currentCylinder * 15;
+        armRadius = startRadius + (currentTargetRadius - startRadius) * seekProgress;
+        targetArmRadius = currentTargetRadius;
+        const newCylinder = Math.floor(currentCylinder + (targetCylinder - currentCylinder) * seekProgress);
+        if (newCylinder !== currentCylinder) {
+          currentCylinder = newCylinder;
+          // 每10帧记录一次进度
+          if (elapsed % 10 === 0) {
+            addLog(`寻道中: 柱面 ${currentCylinder} (进度: ${(seekProgress * 100).toFixed(0)}%)`, 'action');
+          }
+        }
+      }
+    } else if (animationState === 'switching_head') {
+      headSwitchProgress += 0.1;
+      if (headSwitchProgress >= 1) {
+        headSwitchProgress = 1;
+        const oldHead = currentHead;
+        currentHead = targetHead;
+        addLog(`✓ 磁头切换完成: ${oldHead} → ${currentHead}`, 'head');
+        addLog(`当前状态: C=${currentCylinder}, H=${currentHead}, S=${currentSector}`, 'info');
+        animationState = 'rotating';
+        elapsed = 0;
+        addLog(`→ 开始旋转等待扇区: 当前S=${currentSector}, 目标S=${targetSector}`, 'action');
+      } else {
+        // 立即更新currentHead以反映可视化变化（磁头切换是瞬间的，但用动画表示）
+        if (currentHead !== targetHead) {
+          const oldHead = currentHead;
+          currentHead = targetHead;
+          addLog(`切换磁头: ${oldHead} → ${currentHead}`, 'head');
+        }
+        // 每30帧记录一次切换进度（降低频率）
+        if (elapsed % 30 === 0) {
+          addLog(`磁头切换动画中: ${currentHead} (进度: ${(headSwitchProgress * 100).toFixed(0)}%)`, 'action');
+        }
+      }
+    } else if (animationState === 'rotating') {
+      // 等待目标扇区旋转到磁头臂位置
+      const targetAngle = (targetSector / totalSectors) * Math.PI * 2;
+      // 计算目标扇区当前的实际角度（考虑磁盘旋转）
+      const currentTargetAngle = (targetAngle + rotationAngle) % (Math.PI * 2);
+      // 计算磁头臂角度
+      const currentArmAngle = armAngle % (Math.PI * 2);
+      
+      // 计算角度差
+      let diff = currentTargetAngle - currentArmAngle;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      
+      // 每20帧记录一次旋转等待状态
+      if (elapsed % 20 === 0) {
+        const headSector = getHeadSectorPosition();
+        addLog(`旋转等待中: 磁头指向S=${headSector}, 目标S=${targetSector}, 角度差=${(diff * 180 / Math.PI).toFixed(1)}°`, 'action');
+      }
+      
+      if (Math.abs(diff) < 0.1) {
+        animationState = 'reading';
+        elapsed = 0;
+        currentSector = targetSector;
+        currentHead = targetHead; // 确保磁头位置也更新到目标盘面
+        // 初始化磁头点亮效果
+        lightingHeadIndex = -1;
+        headLightingStartTime = 0; // 从0开始计时
+        addLog(`✓ 磁头已到达目标扇区 ${currentSector} (盘面 ${currentHead})`, 'action');
+        addLog(`→ 开始读取数据，所有磁头将依次点亮...`, 'action');
+      }
+    } else if (animationState === 'reading') {
+      elapsed++;
+      
+      // 磁头依次点亮效果：每5帧点亮一个磁头
+      const headLightingInterval = 5;
+      const currentLightingHead = Math.floor(elapsed / headLightingInterval);
+      
+      if (currentLightingHead < numHeads && currentLightingHead >= 0) {
+        if (lightingHeadIndex !== currentLightingHead) {
+          lightingHeadIndex = currentLightingHead;
+          addLog(`💡 磁头 ${lightingHeadIndex} 点亮 (读取柱面 ${currentCylinder} 的数据)`, 'head');
+        }
+      } else if (currentLightingHead >= numHeads && lightingHeadIndex < numHeads - 1) {
+        // 所有磁头都已点亮
+        lightingHeadIndex = numHeads - 1;
+      }
+      
+      if (elapsed >= 30) {
+        // 完成一次访问，重置磁头点亮状态
+        lightingHeadIndex = -1;
+        headLightingStartTime = 0;
+        
+        // 完成一次访问
+        const accessDelay = seekTime + rotationTime + headSwitchTime + readTime;
+        totalAccessTime += accessDelay;
+        currentAccessIndex++;
+
+        if (accessMode === 'random') {
+          // 随机访问模式：每次完成后生成新的随机目标
+          addLog(`✓ 随机访问完成 #${currentAccessIndex}: C=${currentCylinder}, H=${currentHead}, S=${currentSector} | 延迟: ${accessDelay.toFixed(2)}ms`, 'info');
+
+          if (currentAccessIndex >= accessCount) {
+            // 所有随机访问完成
+            animationState = 'idle';
+            addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+            addLog(`✓✓✓ 随机访问序列完成！总延迟: ${totalAccessTime}ms，平均延迟: ${(totalAccessTime / accessCount).toFixed(2)}ms`, 'info');
+            document.getElementById('status').textContent = '随机访问序列完成';
+            document.getElementById('timeStats').textContent = `总延迟: ${totalAccessTime}ms`;
+            document.getElementById('breakdown').textContent =
+              `平均延迟: ${(totalAccessTime / accessCount).toFixed(2)}ms`;
+          } else {
+            // 生成新的随机目标并继续
+            const newTarget = {
+              cylinder: Math.floor(Math.random() * numCylinders),
+              sector: Math.floor(Math.random() * totalSectors),
+              head: Math.floor(Math.random() * numHeads)
+            };
+
+            accessTargets = [newTarget]; // 替换为新的随机目标
+
+            addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+            addLog(`🎲 生成新的随机目标: C=${newTarget.cylinder}, H=${newTarget.head}, S=${newTarget.sector}`, 'target');
+            addLog(`准备访问: 当前 C=${currentCylinder}, H=${currentHead}, S=${currentSector} → 目标 C=${newTarget.cylinder}, H=${newTarget.head}, S=${newTarget.sector}`, 'info');
+            startAccessSequence();
+          }
+        } else {
+          // 顺序访问模式：使用预生成的序列
+          addLog(`✓ 顺序访问完成 #${currentAccessIndex}: C=${currentCylinder}, H=${currentHead}, S=${currentSector} | 延迟: ${accessDelay.toFixed(2)}ms`, 'info');
+
+          if (currentAccessIndex < accessTargets.length) {
+            // 继续下一次访问
+            addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+            startAccessSequence();
+          } else {
+            // 所有访问完成
+            animationState = 'idle';
+            addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+            addLog(`✓✓✓ 访问序列完成！总延迟: ${totalAccessTime}ms，平均延迟: ${(totalAccessTime / accessTargets.length).toFixed(2)}ms`, 'info');
+            document.getElementById('status').textContent = '访问序列完成';
+            document.getElementById('timeStats').textContent = `总延迟: ${totalAccessTime}ms`;
+            document.getElementById('breakdown').textContent =
+              `平均延迟: ${(totalAccessTime / accessTargets.length).toFixed(2)}ms`;
+          }
+        }
+      } else {
+        // 读取过程中每10帧记录一次
+        if (elapsed % 10 === 0) {
+          addLog(`读取中... (${elapsed}/30)`, 'action');
+        }
+      }
+    }
+
+    // 计算磁头当前指向的扇区（每帧更新）
+    const headSectorPos = getHeadSectorPosition();
+    
+    // 更新状态显示
+    document.getElementById('currentPos').textContent = 
+      `当前位置: 柱面 ${currentCylinder}, 磁头 ${currentHead}, 扇区 ${currentSector} | 磁头指向扇区: ${headSectorPos}`;
+    document.getElementById('viewAngle').textContent = 
+      `视角: X=${(rotateX * 180 / Math.PI).toFixed(1)}°, Y=${(rotateY * 180 / Math.PI).toFixed(1)}°`;
+    
+    // 实时更新日志中的当前磁头位置（每30帧更新一次，避免过于频繁）
+    if (elapsed % 30 === 0 && animationState !== 'idle') {
+      // 在访问过程中，定期更新当前磁头位置日志
+      // 只在位置有明显变化时更新日志
+      const lastHeadLog = logEntries.filter(e => e.type === 'head').slice(-1)[0];
+      const currentPosMsg = `当前磁头位置: C=${currentCylinder}, H=${currentHead}, S=${headSectorPos}`;
+      if (!lastHeadLog || lastHeadLog.message !== currentPosMsg) {
+        addLog(currentPosMsg, 'head');
+      }
+
+      // 调试：检查currentHead和targetHead的关系（降低频率，避免刷屏）
+      if ((animationState === 'switching_head' || animationState === 'rotating' || animationState === 'reading') && elapsed % 60 === 0) {
+        addLog(`状态检查: state=${animationState}, currentHead=${currentHead}, targetHead=${targetHead}, currentSector=${currentSector}, targetSector=${targetSector}`, 'info');
+      }
+    }
+
+    drawDisk();
+    requestAnimationFrame(animate);
+  }
+
+  // 事件监听器
+  document.getElementById('sequentialBtn').addEventListener('click', () => {
+    accessMode = 'sequential';
+    document.querySelectorAll('.access-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById('sequentialBtn').classList.add('active');
+    document.getElementById('status').textContent = '已选择顺序访问模式';
+
+    // 生成预览顺序目标并更新显示
+    accessCount = parseInt(document.getElementById('accessCount').value) || 10000;
+    generateAccessTargets();
+    if (accessTargets.length > 0) {
+      const previewTarget = accessTargets[0];
+      // 更新输入框
+      document.getElementById('targetCylinder').value = previewTarget.cylinder;
+      document.getElementById('targetSector').value = previewTarget.sector;
+      document.getElementById('targetHead').value = previewTarget.head;
+      // 更新全局目标变量（用于可视化）
+      targetCylinder = previewTarget.cylinder;
+      targetSector = previewTarget.sector;
+      targetHead = previewTarget.head;
+      
+      // 立即更新currentHead以反映可视化变化
+      if (currentHead !== targetHead) {
+        const oldHead = currentHead;
+        currentHead = targetHead;
+        addLog(`磁头切换: ${oldHead} → ${currentHead} (跟随目标)`, 'head');
+      }
+      
+      addLog(`顺序访问模式已选择，预览第一个目标: C=${previewTarget.cylinder}, H=${previewTarget.head}, S=${previewTarget.sector}`, 'info');
+    }
+  });
+
+  document.getElementById('randomBtn').addEventListener('click', () => {
+    accessMode = 'random';
+    document.querySelectorAll('.access-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById('randomBtn').classList.add('active');
+    document.getElementById('status').textContent = '已选择随机访问模式';
+
+    // 生成一个预览随机目标并更新显示
+    accessCount = parseInt(document.getElementById('accessCount').value) || 10000;
+
+    // 生成单个预览目标
+    const previewTarget = {
+      cylinder: Math.floor(Math.random() * numCylinders),
+      sector: Math.floor(Math.random() * totalSectors),
+      head: Math.floor(Math.random() * numHeads)
+    };
+    accessTargets = [previewTarget]; // 设置为预览目标
+
+    // 更新输入框
+    document.getElementById('targetCylinder').value = previewTarget.cylinder;
+    document.getElementById('targetSector').value = previewTarget.sector;
+    document.getElementById('targetHead').value = previewTarget.head;
+    // 更新全局目标变量（用于可视化）
+    targetCylinder = previewTarget.cylinder;
+    targetSector = previewTarget.sector;
+    targetHead = previewTarget.head;
+    
+    // 立即更新currentHead以反映可视化变化
+    if (currentHead !== targetHead) {
+      const oldHead = currentHead;
+      currentHead = targetHead;
+      addLog(`磁头切换: ${oldHead} → ${currentHead} (跟随目标)`, 'head');
+    }
+    
+    addLog(`随机访问模式已选择，预览第一个目标: C=${previewTarget.cylinder}, H=${previewTarget.head}, S=${previewTarget.sector}`, 'info');
+  });
+
+  document.getElementById('startAccessBtn').addEventListener('click', () => {
+    accessCount = parseInt(document.getElementById('accessCount').value);
+    currentAccessIndex = 0;
+    totalAccessTime = 0;
+
+    if (accessMode === 'random') {
+      // 随机访问模式：只生成第一个目标，后续动态生成
+      const firstTarget = {
+        cylinder: Math.floor(Math.random() * numCylinders),
+        sector: Math.floor(Math.random() * totalSectors),
+        head: Math.floor(Math.random() * numHeads)
+      };
+      accessTargets = [firstTarget];
+
+      addLog(`🎲 开始随机访问模式 - 将连续访问 ${accessCount} 个随机目标`, 'info');
+      addLog(`第一个随机目标: C=${firstTarget.cylinder}, H=${firstTarget.head}, S=${firstTarget.sector}`, 'target');
+    } else {
+      // 顺序访问模式：预生成整个序列
+      generateAccessTargets();
+      addLog(`开始顺序访问序列，共 ${accessCount} 个目标`, 'info');
+    }
+
+    // 更新输入框显示第一个目标（让用户看到第一个要访问的目标）
+    if (accessTargets.length > 0) {
+      const firstTarget = accessTargets[0];
+      document.getElementById('targetCylinder').value = firstTarget.cylinder;
+      document.getElementById('targetSector').value = firstTarget.sector;
+      document.getElementById('targetHead').value = firstTarget.head;
+    }
+
+    startAccessSequence();
+  });
+
+  document.getElementById('stopAccessBtn').addEventListener('click', () => {
+    animationState = 'idle';
+    document.getElementById('status').textContent = '访问已停止';
+  });
+
+  document.getElementById('setTargetBtn').addEventListener('click', () => {
+    // 设置当前目标
+    targetCylinder = parseInt(document.getElementById('targetCylinder').value);
+    targetSector = parseInt(document.getElementById('targetSector').value);
+    targetHead = parseInt(document.getElementById('targetHead').value);
+    
+    // 磁头臂固定角度，不旋转，只能沿半径伸缩
+    // 设置磁头臂目标半径（移动到目标柱面）
+    targetArmRadius = 40 + targetCylinder * 15;
+    
+    // 添加日志
+    addLog(`手动设置目标: C=${targetCylinder}, H=${targetHead}, S=${targetSector}`, 'target');
+    addLog(`当前磁头位置: C=${currentCylinder}, H=${currentHead}, S=${currentSector}`, 'head');
+    
+    if (currentCylinder !== targetCylinder) {
+      addLog(`磁头臂将伸缩: 柱面 ${currentCylinder} → ${targetCylinder}`, 'action');
+    }
+    if (currentHead !== targetHead) {
+      addLog(`将切换磁头: ${currentHead} → ${targetHead}`, 'action');
+    }
+    if (currentSector !== targetSector) {
+      addLog(`将旋转到扇区: ${currentSector} → ${targetSector}`, 'action');
+    }
+    
+    // 如果目标磁头不同，也更新当前磁头
+    if (targetHead !== currentHead) {
+      currentHead = targetHead;
+    }
+    
+    document.getElementById('status').textContent = `目标已设置: 柱面${targetCylinder}, 磁头${targetHead}, 扇区${targetSector} - 磁头正在移动到目标位置（半径方向+角度方向）`;
+  });
+
+  // 复制日志按钮
+  document.getElementById('copyLogBtn').addEventListener('click', () => {
+    const logText = logEntries.map(entry => `[${entry.time}] ${entry.message}`).join('\n');
+    navigator.clipboard.writeText(logText).then(() => {
+      addLog('✓ 日志已复制到剪贴板', 'info');
+    }).catch(err => {
+      // 降级方案：使用textarea
+      const textarea = document.createElement('textarea');
+      textarea.value = logText;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      addLog('✓ 日志已复制到剪贴板', 'info');
+    });
+  });
+
+  // 打印日志按钮
+  document.getElementById('printLogBtn').addEventListener('click', () => {
+    const logText = logEntries.map(entry => `[${entry.time}] ${entry.message}`).join('\n');
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>HDD可视化日志</title>
+          <style>
+            body { font-family: monospace; padding: 20px; background: white; color: black; }
+            h1 { color: #333; }
+            pre { background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto; }
+          </style>
+        </head>
+        <body>
+          <h1>HDD 3D可视化 - 实时日志</h1>
+          <pre>${logText}</pre>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+  });
+
+  // 清空日志按钮
+  document.getElementById('clearLogBtn').addEventListener('click', () => {
+    logEntries = [];
+    updateLogDisplay();
+    addLog('日志已清空', 'info');
+  });
+
+  // 磁盘参数更新
+  document.getElementById('numHeadsSelect').addEventListener('change', (e) => {
+    numHeads = parseInt(e.target.value);
+    // 重新生成访问目标
+    if (accessTargets.length > 0) {
+      generateAccessTargets();
+    }
+  });
+  document.getElementById('numCylindersSelect').addEventListener('change', (e) => {
+    numCylinders = parseInt(e.target.value);
+    // 重新生成访问目标
+    if (accessTargets.length > 0) {
+      generateAccessTargets();
+    }
+  });
+  document.getElementById('numSectorsSelect').addEventListener('change', (e) => {
+    totalSectors = parseInt(e.target.value);
+    // 重新生成访问目标
+    if (accessTargets.length > 0) {
+      generateAccessTargets();
+    }
+  });
+  document.getElementById('rpmSelect').addEventListener('change', (e) => {
+    rpm = parseInt(e.target.value);
+    // 根据RPM计算旋转速度
+    rotationSpeed = (rpm / 60) * 0.001; // 转/秒 * 系数
+  });
+
+  // 鼠标事件处理
+  canvas.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    
+    const deltaX = e.clientX - lastMouseX;
+    const deltaY = e.clientY - lastMouseY;
+    
+    rotateY += deltaX * 0.01;
+    rotateX += deltaY * 0.01;
+    
+    // 限制X轴旋转范围
+    rotateX = Math.max(-Math.PI/2, Math.min(Math.PI/2, rotateX));
+    
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+  });
+
+  canvas.addEventListener('mouseup', () => {
+    isDragging = false;
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    isDragging = false;
+  });
+
+  // 滚轮缩放
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    scale += e.deltaY * -0.001;
+    scale = Math.min(Math.max(0.5, scale), 3);
+  });
+
+  // 初始化旋转速度（根据RPM）
+  rotationSpeed = (rpm / 60) * 0.001; // 转/秒 * 系数
+
+  // 初始化
+  addLog('系统初始化完成，等待操作...', 'info');
+  addLog(`当前磁头位置: C=${currentCylinder}, H=${currentHead}, S=${currentSector}`, 'head');
+  
+  // 自动开始随机访问
+  accessMode = 'random';
+  document.querySelectorAll('.access-btn').forEach(btn => btn.classList.remove('active'));
+  document.getElementById('randomBtn').classList.add('active');
+  document.getElementById('status').textContent = '已选择随机访问模式';
+  
+  // 设置访问参数
+  accessCount = parseInt(document.getElementById('accessCount').value) || 10000;
+  currentAccessIndex = 0;
+  totalAccessTime = 0;
+  
+  // 生成第一个随机目标
+  const firstTarget = {
+    cylinder: Math.floor(Math.random() * numCylinders),
+    sector: Math.floor(Math.random() * totalSectors),
+    head: Math.floor(Math.random() * numHeads)
+  };
+  accessTargets = [firstTarget];
+  
+  // 更新输入框显示第一个目标
+  document.getElementById('targetCylinder').value = firstTarget.cylinder;
+  document.getElementById('targetSector').value = firstTarget.sector;
+  document.getElementById('targetHead').value = firstTarget.head;
+  
+  addLog(`🎲 自动开始随机访问模式 - 将连续访问 ${accessCount} 个随机目标`, 'info');
+  addLog(`第一个随机目标: C=${firstTarget.cylinder}, H=${firstTarget.head}, S=${firstTarget.sector}`, 'target');
+  
+  // 开始访问序列
+  startAccessSequence();
+  
+  drawDisk();
+  animate();
+</script>
+
+</body>
+</html>

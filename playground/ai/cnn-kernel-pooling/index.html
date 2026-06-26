@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>卷积核移动、特征图生成及池化层可视化（适配布局）</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .explanation {
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+        .visualization {
+            display: flex;
+            justify-content: space-around;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .section {
+            flex: 1;
+            min-width: 280px; /* 调整最小宽度 */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .section-title {
+            text-align: center;
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #555;
+        }
+        .matrix-container {
+            display: inline-block;
+            border: 2px solid #333;
+            padding: 5px; /* 减少内边距 */
+            background-color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            max-width: 100%; /* 确保不超出容器 */
+            overflow: auto; /* 如果内容过大则滚动 */
+        }
+        .matrix, .feature-map, .pooling-map {
+            display: grid;
+            gap: 1px;
+        }
+        /* 输入矩阵: 32x32 */
+        .matrix {
+            grid-template-columns: repeat(32, 1fr);
+            width: 320px; /* 固定宽度 */
+            height: 320px; /* 固定高度 */
+        }
+        /* 特征图: 28x28 */
+        .feature-map {
+            grid-template-columns: repeat(28, 1fr);
+            width: 280px; /* 固定宽度 */
+            height: 280px; /* 固定高度 */
+        }
+        /* 池化结果: 14x14 */
+        .pooling-map {
+            grid-template-columns: repeat(14, 1fr);
+            width: 280px; /* 固定宽度 */
+            height: 280px; /* 固定高度 */
+        }
+        .cell, .feature-cell, .pooling-cell {
+            border: 1px solid #ddd;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 8px;
+            font-weight: bold;
+        }
+        .matrix .cell {
+            width: 10px; /* 10px * 32 + 31px gap = 351px */
+            height: 10px;
+        }
+        .feature-map .feature-cell {
+            width: 10px; /* 10px * 28 + 27px gap = 307px */
+            height: 10px;
+        }
+        .pooling-map .pooling-cell {
+            width: 20px; /* 20px * 14 + 13px gap = 293px */
+            height: 20px;
+        }
+        .kernel-area {
+            background-color: #ffeb3b;
+            position: relative;
+            z-index: 1;
+        }
+        .kernel-highlight {
+            background-color: #f44336 !important;
+            color: white;
+        }
+        .pooling-area {
+            background-color: #2196f3;
+            position: relative;
+            z-index: 1;
+        }
+        .pooling-highlight {
+            background-color: #ff9800 !important;
+            color: white;
+        }
+        .feature-cell.active {
+            background-color: #4caf50;
+            color: white;
+        }
+        .pooling-cell.active {
+            background-color: #9c27b0;
+            color: white;
+        }
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 0 10px;
+            cursor: pointer;
+            background-color: #2196f3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+        button:hover {
+            background-color: #1976d2;
+        }
+        button:disabled {
+            background-color: #bbdefb;
+            cursor: not-allowed;
+        }
+        .info-panel {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e3f2fd;
+            border-radius: 4px;
+        }
+        .legend {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>卷积核移动、特征图生成及池化层可视化（适配布局）</h1>
+        
+        <div class="explanation">
+            <p>本页面展示了5×5卷积核在32×32输入矩阵上滑动，生成28×28特征图，然后通过2×2最大池化生成14×14池化结果的过程。</p>
+            <p>输入矩阵、特征图和池化结果均显示为固定尺寸的容器，便于观察不同层之间的对应关系。</p>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #ffffff; border: 1px solid #ddd;"></div>
+                <span>输入矩阵元素</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #ffeb3b;"></div>
+                <span>卷积核覆盖区域</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #f44336; color: white;">C</div>
+                <span>当前计算中心</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #e8f5e9; border: 1px solid #4caf50;"></div>
+                <span>特征图元素</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #4caf50; color: white;">F</div>
+                <span>当前生成特征</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #2196f3;"></div>
+                <span>池化窗口区域</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #9c27b0; color: white;">P</div>
+                <span>当前池化结果</span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="prevBtn" disabled>上一步</button>
+            <button id="nextBtn">下一步</button>
+            <button id="autoBtn">自动播放</button>
+        </div>
+
+        <div class="visualization">
+            <div class="section">
+                <div class="section-title">输入矩阵 (32×32)</div>
+                <div class="matrix-container">
+                    <div class="matrix" id="inputMatrix"></div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">输出特征图 (28×28)</div>
+                <div class="matrix-container">
+                    <div class="feature-map" id="featureMap"></div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">池化结果 (14×14)</div>
+                <div class="matrix-container">
+                    <div class="pooling-map" id="poolingMap"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="info-panel">
+            <p id="positionInfo">当前位置: (0, 0) → 特征图位置: (0, 0) → 池化位置: (0, 0)</p>
+            <p id="processInfo">卷积核正在计算输入矩阵位置(0,0)到(4,4)区域内所有元素与卷积核权重的乘积之和...</p>
+            <p>池化窗口正在计算特征图位置(0,0)到(1,1)区域内所有元素的最大值...</p>
+        </div>
+    </div>
+
+    <script>
+        // 初始化输入矩阵 (32x32) - 使用随机值
+        const inputMatrix = [];
+        for (let i = 0; i < 32; i++) {
+            const row = [];
+            for (let j = 0; j < 32; j++) {
+                row.push(Math.floor(Math.random() * 10));
+            }
+            inputMatrix.push(row);
+        }
+
+        // 初始化特征图 (28x28)，初始值为0
+        let featureMap = Array(28).fill().map(() => Array(28).fill(0));
+        
+        // 初始化池化结果 (14x14)，初始值为0
+        let poolingMap = Array(14).fill().map(() => Array(14).fill(0));
+        
+        // 当前卷积核位置
+        let currentRow = 0;
+        let currentCol = 0;
+        
+        // 自动播放定时器
+        let autoPlayInterval = null;
+
+        // 创建输入矩阵的HTML元素
+        function createInputMatrix() {
+            const container = document.getElementById('inputMatrix');
+            container.innerHTML = '';
+            
+            for (let i = 0; i < 32; i++) {
+                for (let j = 0; j < 32; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.textContent = inputMatrix[i][j];
+                    cell.id = `input-${i}-${j}`;
+                    container.appendChild(cell);
+                }
+            }
+        }
+
+        // 创建特征图的HTML元素
+        function createFeatureMap() {
+            const container = document.getElementById('featureMap');
+            container.innerHTML = '';
+            
+            for (let i = 0; i < 28; i++) {
+                for (let j = 0; j < 28; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'feature-cell';
+                    cell.textContent = '0';
+                    cell.id = `feature-${i}-${j}`;
+                    container.appendChild(cell);
+                }
+            }
+        }
+
+        // 创建池化结果的HTML元素
+        function createPoolingMap() {
+            const container = document.getElementById('poolingMap');
+            container.innerHTML = '';
+            
+            for (let i = 0; i < 14; i++) {
+                for (let j = 0; j < 14; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'pooling-cell';
+                    cell.textContent = '0';
+                    cell.id = `pooling-${i}-${j}`;
+                    container.appendChild(cell);
+                }
+            }
+        }
+
+        // 更新可视化显示
+        function updateVisualization() {
+            // 清除之前的高亮
+            document.querySelectorAll('.kernel-area').forEach(el => {
+                el.classList.remove('kernel-area');
+            });
+            document.querySelectorAll('.kernel-highlight').forEach(el => {
+                el.classList.remove('kernel-highlight');
+            });
+            document.querySelectorAll('.feature-cell.active').forEach(el => {
+                el.classList.remove('active');
+            });
+            document.querySelectorAll('.pooling-area').forEach(el => {
+                el.classList.remove('pooling-area');
+            });
+            document.querySelectorAll('.pooling-highlight').forEach(el => {
+                el.classList.remove('pooling-highlight');
+            });
+            document.querySelectorAll('.pooling-cell.active').forEach(el => {
+                el.classList.remove('active');
+            });
+
+            // 高亮显示当前卷积核覆盖的区域
+            for (let i = currentRow; i < currentRow + 5 && i < 32; i++) {
+                for (let j = currentCol; j < currentCol + 5 && j < 32; j++) {
+                    const cell = document.getElementById(`input-${i}-${j}`);
+                    if (cell) {
+                        cell.classList.add('kernel-area');
+                        // 高亮中心点
+                        if (i === currentRow + 2 && j === currentCol + 2) {
+                            cell.classList.add('kernel-highlight');
+                            cell.textContent = 'C';
+                        }
+                    }
+                }
+            }
+
+            // 高亮显示对应的特征图位置
+            if (currentRow <= 27 && currentCol <= 27) {
+                const featureCell = document.getElementById(`feature-${currentRow}-${currentCol}`);
+                if (featureCell) {
+                    featureCell.classList.add('active');
+                    featureCell.textContent = 'F';
+                }
+            }
+
+            // 高亮显示池化窗口覆盖的特征图区域和对应的池化结果
+            if (currentRow <= 26 && currentCol <= 26) {
+                // 高亮池化窗口覆盖的2x2特征图区域
+                for (let i = currentRow; i < currentRow + 2 && i < 28; i++) {
+                    for (let j = currentCol; j < currentCol + 2 && j < 28; j++) {
+                        const featureCell = document.getElementById(`feature-${i}-${j}`);
+                        if (featureCell) {
+                            featureCell.classList.add('pooling-area');
+                            // 高亮左上角
+                            if (i === currentRow && j === currentCol) {
+                                featureCell.classList.add('pooling-highlight');
+                                featureCell.textContent = 'P';
+                            }
+                        }
+                    }
+                }
+
+                // 高亮对应的池化结果位置
+                const poolRow = Math.floor(currentRow / 2);
+                const poolCol = Math.floor(currentCol / 2);
+                if (poolRow <= 13 && poolCol <= 13) {
+                    const poolingCell = document.getElementById(`pooling-${poolRow}-${poolCol}`);
+                    if (poolingCell) {
+                        poolingCell.classList.add('active');
+                        poolingCell.textContent = 'P';
+                    }
+                }
+            }
+
+            // 更新信息面板
+            const poolRow = Math.floor(currentRow / 2);
+            const poolCol = Math.floor(currentCol / 2);
+            document.getElementById('positionInfo').textContent = 
+                `当前位置: (${currentRow}, ${currentCol}) → 特征图位置: (${currentRow}, ${currentCol}) → 池化位置: (${poolRow}, ${poolCol})`;
+            
+            document.getElementById('processInfo').textContent = 
+                `卷积核正在计算输入矩阵位置(${currentRow},${currentCol})到(${currentRow+4},${currentCol+4})区域内所有元素与卷积核权重的乘积之和，结果将存储在特征图的(${currentRow},${currentCol})位置。池化窗口正在计算特征图位置(${currentRow},${currentCol})到(${currentRow+1},${currentCol+1})区域内所有元素的最大值，结果将存储在池化结果的(${poolRow},${poolCol})位置。`;
+
+            // 更新按钮状态
+            document.getElementById('prevBtn').disabled = (currentRow === 0 && currentCol === 0);
+            document.getElementById('nextBtn').disabled = (currentRow === 27 && currentCol === 27);
+        }
+
+        // 下一步
+        function nextStep() {
+            if (currentCol < 27) {
+                currentCol++;
+            } else if (currentRow < 27) {
+                currentRow++;
+                currentCol = 0;
+            }
+            updateVisualization();
+        }
+
+        // 上一步
+        function prevStep() {
+            if (currentCol > 0) {
+                currentCol--;
+            } else if (currentRow > 0) {
+                currentRow--;
+                currentCol = 27;
+            }
+            updateVisualization();
+        }
+
+        // 自动播放
+        function toggleAutoPlay() {
+            const btn = document.getElementById('autoBtn');
+            if (autoPlayInterval) {
+                clearInterval(autoPlayInterval);
+                autoPlayInterval = null;
+                btn.textContent = '自动播放';
+            } else {
+                autoPlayInterval = setInterval(() => {
+                    if (currentRow === 27 && currentCol === 27) {
+                        clearInterval(autoPlayInterval);
+                        autoPlayInterval = null;
+                        btn.textContent = '自动播放';
+                    } else {
+                        nextStep();
+                    }
+                }, 500);
+                btn.textContent = '停止播放';
+            }
+        }
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            createInputMatrix();
+            createFeatureMap();
+            createPoolingMap();
+            updateVisualization();
+            
+            document.getElementById('nextBtn').addEventListener('click', nextStep);
+            document.getElementById('prevBtn').addEventListener('click', prevStep);
+            document.getElementById('autoBtn').addEventListener('click', toggleAutoPlay);
+        });
+    </script>
+</body>
+</html>
