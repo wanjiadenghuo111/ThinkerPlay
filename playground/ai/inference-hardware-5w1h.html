@@ -1,0 +1,2670 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>模型推理与硬件资源依赖 5W1H 可视化</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #f5f7f4;
+      --surface: #ffffff;
+      --surface-soft: #eef5f2;
+      --ink: #13201e;
+      --muted: #5e6f68;
+      --line: #d8e3de;
+      --cpu: #df5a45;
+      --ram: #0f8b8d;
+      --accel: #7650bd;
+      --vram: #c58a16;
+      --ok: #22815c;
+      --warn: #b77413;
+      --risk: #c9483a;
+      --shadow: 0 20px 60px rgba(31, 49, 44, 0.08);
+      --radius: 8px;
+      font-family: "Inter", "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      min-width: 320px;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(90deg, rgba(19, 32, 30, 0.035) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(19, 32, 30, 0.035) 1px, transparent 1px),
+        var(--page);
+      background-size: 28px 28px;
+      letter-spacing: 0;
+      overflow-x: hidden;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .page {
+      width: min(1240px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 56px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 22px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .brand-mark {
+      display: grid;
+      grid-template-columns: repeat(2, 14px);
+      grid-template-rows: repeat(2, 14px);
+      gap: 4px;
+      flex: 0 0 auto;
+      padding: 7px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .brand-mark span {
+      border-radius: 4px;
+    }
+
+    .brand-mark span:nth-child(1) {
+      background: var(--cpu);
+    }
+
+    .brand-mark span:nth-child(2) {
+      background: var(--ram);
+    }
+
+    .brand-mark span:nth-child(3) {
+      background: var(--accel);
+    }
+
+    .brand-mark span:nth-child(4) {
+      background: var(--vram);
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 2.05rem;
+      line-height: 1.12;
+      font-weight: 780;
+      letter-spacing: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .brand > div:last-child {
+      flex: 1 1 0;
+      max-width: calc(100% - 58px);
+      min-width: 0;
+    }
+
+    .brand p {
+      margin: 7px 0 0;
+      color: var(--muted);
+      line-height: 1.6;
+      max-width: min(760px, 100%);
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .nav {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      flex: 0 0 auto;
+    }
+
+    .nav a {
+      min-height: 36px;
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 0 12px;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.78);
+      text-decoration: none;
+      font-size: 0.92rem;
+      white-space: nowrap;
+    }
+
+    .architecture-switch {
+      display: grid;
+      grid-template-columns: minmax(220px, 0.55fr) minmax(0, 1fr);
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 18px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: var(--shadow);
+      min-width: 0;
+    }
+
+    .architecture-title {
+      min-width: 0;
+    }
+
+    .architecture-title span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 780;
+    }
+
+    .architecture-title strong {
+      display: block;
+      margin-top: 4px;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
+
+    .architecture-options {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .architecture-options button {
+      min-height: 44px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+      color: var(--muted);
+      padding: 8px 10px;
+      font-weight: 760;
+      line-height: 1.25;
+      text-align: left;
+    }
+
+    .architecture-options button.is-active {
+      color: var(--ink);
+      border-color: #253c35;
+      background: #f2f7f4;
+      box-shadow: inset 0 0 0 1px #253c35;
+    }
+
+    .dashboard {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(340px, 0.85fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, #ffffff 0%, #f7faf8 100%);
+    }
+
+    .panel-title {
+      min-width: 0;
+    }
+
+    .panel-title h2 {
+      margin: 0;
+      font-size: 1.08rem;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    .panel-title .panel-subtitle {
+      margin: 4px 0 0;
+      color: var(--ink);
+      font-size: 0.96rem;
+      font-weight: 700;
+      line-height: 1.35;
+      letter-spacing: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .panel-title p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 0.94rem;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      padding: 0 10px;
+      color: var(--muted);
+      background: #fff;
+      font-size: 0.84rem;
+      white-space: nowrap;
+    }
+
+    .flow-body {
+      padding: 20px;
+    }
+
+    .legend {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(120px, 1fr));
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 8px 10px;
+      background: #fff;
+      color: var(--muted);
+      font-size: 0.9rem;
+      min-width: 0;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+      background: var(--dot-color);
+    }
+
+    .flow-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(118px, 1fr));
+      gap: 10px;
+      position: relative;
+      min-width: 0;
+    }
+
+    .phase {
+      position: relative;
+      min-height: 186px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px;
+      background: #fff;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow: hidden;
+      min-width: 0;
+      cursor: pointer;
+      transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease, background 180ms ease;
+    }
+
+    .phase:hover,
+    .phase:focus-visible {
+      border-color: rgba(19, 32, 30, 0.38);
+      outline: none;
+      transform: translateY(-1px);
+    }
+
+    .phase.is-active {
+      border-color: #253c35;
+      box-shadow: 0 16px 36px rgba(31, 49, 44, 0.16), inset 0 0 0 1px #253c35;
+      background: #fbfdfc;
+      transform: translateY(-2px);
+    }
+
+    .phase.is-active::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      background: linear-gradient(180deg, rgba(15, 139, 141, 0.08), transparent 44%);
+    }
+
+    .phase::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 5px;
+      background: linear-gradient(90deg, var(--cpu), var(--ram), var(--accel), var(--vram));
+    }
+
+    .phase-step {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+
+    .phase h3 {
+      margin: 0;
+      font-size: 1rem;
+      line-height: 1.25;
+      letter-spacing: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .phase p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 0.9rem;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .chips {
+      margin-top: auto;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .chip {
+      min-height: 24px;
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 0 8px;
+      color: #fff;
+      font-size: 0.76rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .chip.cpu {
+      background: var(--cpu);
+    }
+
+    .chip.ram {
+      background: var(--ram);
+    }
+
+    .chip.accel {
+      background: var(--accel);
+    }
+
+    .chip.vram {
+      background: var(--vram);
+    }
+
+    .rail-map {
+      display: grid;
+      grid-template-columns: 86px minmax(0, 1fr);
+      gap: 10px;
+      margin-top: 18px;
+      align-items: center;
+    }
+
+    .rail-labels {
+      display: grid;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 0.84rem;
+      font-weight: 700;
+    }
+
+    .rail-labels div,
+    .rails div {
+      min-height: 28px;
+      display: flex;
+      align-items: center;
+    }
+
+    .rails {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .rail-track {
+      position: relative;
+      height: 28px;
+      border-radius: 999px;
+      background: #edf3f0;
+      overflow: hidden;
+    }
+
+    .rail-track span {
+      display: block;
+      height: 100%;
+      width: var(--value, 0%);
+      border-radius: inherit;
+      background: var(--rail);
+      transition: width 320ms ease;
+    }
+
+    .simulator {
+      padding: 18px;
+    }
+
+    .scenario-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .scenario {
+      min-height: 48px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+      color: var(--ink);
+      padding: 8px 10px;
+      text-align: left;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+
+    .scenario.is-active {
+      border-color: #253c35;
+      box-shadow: inset 0 0 0 1px #253c35;
+      background: #f2f7f4;
+    }
+
+    .control-stack {
+      display: grid;
+      gap: 14px;
+    }
+
+    .input-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .number-field {
+      display: grid;
+      gap: 7px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 10px;
+      background: #fff;
+      min-width: 0;
+    }
+
+    .number-field span {
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 700;
+      line-height: 1.25;
+    }
+
+    .number-field input {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 0 10px;
+      color: var(--ink);
+      background: #fbfdfc;
+      font-weight: 760;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .number-field input:focus {
+      outline: 2px solid rgba(15, 139, 141, 0.28);
+      border-color: var(--ram);
+    }
+
+    .control {
+      display: grid;
+      gap: 8px;
+    }
+
+    .control label,
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 0.9rem;
+      font-weight: 700;
+    }
+
+    .control output {
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--ram);
+    }
+
+    .segmented {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .segmented button {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .segmented button.is-active {
+      color: #fff;
+      border-color: var(--accel);
+      background: var(--accel);
+    }
+
+    .toggle-row {
+      min-height: 44px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 0 12px;
+      background: #fff;
+    }
+
+    .toggle-row input {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accel);
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      background: #fff;
+      min-width: 0;
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 6px;
+      font-size: 1.25rem;
+      line-height: 1.15;
+      font-variant-numeric: tabular-nums;
+      overflow-wrap: anywhere;
+    }
+
+    .spec-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .spec-card {
+      border: 1px solid var(--line);
+      border-left: 5px solid var(--spec-color);
+      border-radius: var(--radius);
+      padding: 12px;
+      background: #fff;
+      min-width: 0;
+    }
+
+    .spec-card span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 780;
+    }
+
+    .spec-card strong {
+      display: block;
+      margin-top: 6px;
+      font-size: 1.1rem;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+
+    .spec-card small {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .pressure-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .pressure {
+      display: grid;
+      grid-template-columns: 86px minmax(0, 1fr) 44px;
+      gap: 10px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 0.86rem;
+      font-weight: 700;
+    }
+
+    .bar {
+      height: 12px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: #ecf1ee;
+    }
+
+    .bar span {
+      display: block;
+      width: var(--value);
+      height: 100%;
+      max-width: 100%;
+      border-radius: inherit;
+      background: var(--bar-color);
+      transition: width 180ms ease;
+    }
+
+    .bottleneck {
+      margin-top: 16px;
+      border: 1px solid var(--line);
+      border-left: 5px solid var(--warn);
+      border-radius: var(--radius);
+      padding: 12px;
+      background: #fffaf0;
+      line-height: 1.55;
+    }
+
+    .bottleneck strong {
+      display: block;
+      margin-bottom: 3px;
+    }
+
+    .section {
+      margin-top: 22px;
+      padding: 4px 0;
+    }
+
+    .section-heading {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+
+    .section-heading h2 {
+      margin: 0;
+      font-size: 1.35rem;
+      letter-spacing: 0;
+    }
+
+    .section-heading p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+      max-width: 720px;
+    }
+
+    .question-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .question-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 16px;
+      box-shadow: 0 10px 32px rgba(31, 49, 44, 0.05);
+      min-height: 178px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .question-card .key {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      min-height: 28px;
+      border-radius: 999px;
+      padding: 0 9px;
+      color: #fff;
+      background: #253c35;
+      font-size: 0.8rem;
+      font-weight: 780;
+    }
+
+    .question-card h3 {
+      margin: 0;
+      font-size: 1rem;
+      line-height: 1.25;
+    }
+
+    .question-card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .hardware-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .hardware-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 16px;
+      min-height: 232px;
+      box-shadow: 0 10px 32px rgba(31, 49, 44, 0.05);
+      min-width: 0;
+    }
+
+    .hardware-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: var(--radius);
+      display: grid;
+      place-items: center;
+      color: #fff;
+      margin-bottom: 12px;
+      background: var(--hardware-color);
+    }
+
+    .hardware-icon svg {
+      width: 34px;
+      height: 34px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .hardware-card h3 {
+      margin: 0 0 8px;
+      font-size: 1.08rem;
+      line-height: 1.25;
+    }
+
+    .hardware-card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .hardware-card ul {
+      margin: 12px 0 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .table-wrap {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow-x: auto;
+      background: var(--surface);
+      box-shadow: 0 10px 32px rgba(31, 49, 44, 0.05);
+    }
+
+    table {
+      width: 100%;
+      min-width: 760px;
+      border-collapse: collapse;
+      line-height: 1.45;
+    }
+
+    th,
+    td {
+      padding: 13px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--ink);
+      background: #f7faf8;
+      font-size: 0.9rem;
+    }
+
+    td {
+      color: var(--muted);
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .level {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      border-radius: 999px;
+      padding: 0 8px;
+      color: #fff;
+      font-size: 0.78rem;
+      font-weight: 780;
+      white-space: nowrap;
+      margin-right: 6px;
+    }
+
+    .level.high {
+      background: var(--risk);
+    }
+
+    .level.mid {
+      background: var(--warn);
+    }
+
+    .level.low {
+      background: var(--ok);
+    }
+
+    .rule-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .rule {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 16px;
+      min-height: 154px;
+      box-shadow: 0 10px 32px rgba(31, 49, 44, 0.05);
+      min-width: 0;
+    }
+
+    .rule strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 0.98rem;
+      line-height: 1.3;
+    }
+
+    .rule p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .note {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #f9fbfa;
+      color: var(--muted);
+      padding: 14px 16px;
+      line-height: 1.6;
+      margin-top: 12px;
+    }
+
+    @media (max-width: 1120px) {
+      .dashboard,
+      .hardware-grid,
+      .rule-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .flow-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 840px) {
+      .page {
+        width: min(100% - 24px, 720px);
+        padding-top: 18px;
+      }
+
+      .topbar,
+      .architecture-switch,
+      .section-heading {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .brand {
+        width: 100%;
+      }
+
+      .nav {
+        justify-content: flex-start;
+      }
+
+      .architecture-switch {
+        display: flex;
+        width: 100%;
+      }
+
+      .architecture-options {
+        width: 100%;
+        grid-template-columns: 1fr;
+      }
+
+      .brand h1 {
+        font-size: 1.62rem;
+        max-width: 100%;
+      }
+
+      .dashboard,
+      .question-grid,
+      .hardware-grid,
+      .rule-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .legend {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .flow-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .phase {
+        min-height: 152px;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .page {
+        width: 100%;
+        padding: 18px 20px 56px;
+      }
+
+      .brand {
+        align-items: flex-start;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        width: 100%;
+      }
+
+      .brand > div:last-child {
+        max-width: none;
+        min-width: 0;
+        width: 100%;
+      }
+
+      .brand h1 {
+        font-size: 1.24rem;
+        line-height: 1.18;
+        max-width: calc(100vw - 112px);
+        white-space: normal;
+      }
+
+      .brand h1,
+      .brand p,
+      .architecture-options button,
+      .panel-title h2,
+      .panel-title .panel-subtitle,
+      .panel-title p,
+      .legend-item,
+      .phase h3,
+      .phase p,
+      .question-card p,
+      .hardware-card p,
+      .rule p,
+      .spec-card small {
+        overflow-wrap: anywhere;
+        word-break: break-all;
+      }
+
+      .brand p {
+        max-width: calc(100vw - 112px);
+      }
+
+      .panel-title h2,
+      .panel-title .panel-subtitle,
+      .panel-title p,
+      .legend-item,
+      .phase h3,
+      .phase p {
+        max-width: calc(100vw - 72px);
+      }
+
+      .architecture-switch,
+      .architecture-options,
+      .architecture-options button {
+        max-width: 100%;
+        min-width: 0;
+      }
+
+      .brand p,
+      .panel-title p,
+      .legend-item,
+      .phase p,
+      .question-card p,
+      .hardware-card p,
+      .rule p,
+      .spec-card small {
+        padding-right: 8px;
+        width: calc(100% - 12px);
+      }
+
+      .brand-mark {
+        grid-template-columns: repeat(2, 11px);
+        grid-template-rows: repeat(2, 11px);
+      }
+
+      .panel-header,
+      .flow-body,
+      .simulator {
+        padding: 14px;
+      }
+
+      .panel-header {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .badge {
+        white-space: normal;
+      }
+
+      .legend,
+      .scenario-grid,
+      .input-grid,
+      .metrics,
+      .spec-grid,
+      .segmented {
+        grid-template-columns: 1fr;
+      }
+
+      .rail-map {
+        grid-template-columns: 64px minmax(0, 1fr);
+      }
+
+      .pressure {
+        grid-template-columns: 64px minmax(0, 1fr) 38px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <div>
+          <h1 id="pageTitle">模型推理与四大硬件资源依赖</h1>
+          <p id="pageLead">用 5W1H 拆解一次大模型推理请求：CPU 负责组织，内存承接数据，GPU/NPU 做核心计算，显存决定模型、上下文与并发边界。</p>
+        </div>
+      </div>
+      <nav class="nav" aria-label="页面导航">
+        <a href="#flow">推理流程</a>
+        <a href="#fivewoneh">5W1H</a>
+        <a href="#hardware">硬件关系</a>
+        <a href="#rules">调优规则</a>
+      </nav>
+    </header>
+
+    <section class="architecture-switch" aria-label="硬件架构切换">
+      <div class="architecture-title">
+        <span>当前模型类型</span>
+        <strong id="modelName">Transformer 生成模型</strong>
+      </div>
+      <div class="architecture-options" role="group" aria-label="选择模型类型">
+        <button class="is-active" type="button" data-model="transformer">Transformer 生成模型</button>
+        <button type="button" data-model="cnn">CNN 判别模型</button>
+      </div>
+    </section>
+
+    <section class="architecture-switch" aria-label="硬件架构切换">
+      <div class="architecture-title">
+        <span>当前硬件架构</span>
+        <strong id="archName">CPU + LPDDR 内存</strong>
+      </div>
+      <div class="architecture-options" role="group" aria-label="选择硬件架构">
+        <button class="is-active" type="button" data-arch="cpu-lpddr">CPU + LPDDR 内存</button>
+        <button type="button" data-arch="npu-unified">CPU + 边缘 NPU 统一 LPDDR</button>
+        <button type="button" data-arch="dgpu-gddr">CPU + LPDDR + 独立 GPU/GDDR</button>
+      </div>
+    </section>
+
+    <section id="flow" class="dashboard" aria-label="推理流程和资源估算">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <h2>推理流程</h2>
+            <h3 class="panel-subtitle" id="flowTitle">一次推理请求如何穿过硬件</h3>
+            <p id="flowLead">推理通常不是一次性生成整段答案，而是先处理 prompt，再逐 token 循环生成输出。</p>
+          </div>
+          <span class="badge" id="flowBadge">Prefill + Decode</span>
+        </div>
+        <div class="flow-body">
+          <div class="legend" aria-label="硬件图例">
+            <div class="legend-item" id="legendCpu"><span class="dot" style="--dot-color: var(--cpu)"></span>CPU：调度、分词、采样、I/O</div>
+            <div class="legend-item" id="legendRam"><span class="dot" style="--dot-color: var(--ram)"></span>内存：请求、权重映射、缓存缓冲</div>
+            <div class="legend-item" id="legendAccel"><span class="dot" style="--dot-color: var(--accel)"></span>GPU/NPU：矩阵乘、注意力、算子</div>
+            <div class="legend-item" id="legendVram"><span class="dot" style="--dot-color: var(--vram)"></span>显存：权重、KV cache、激活</div>
+          </div>
+
+          <div class="flow-grid">
+            <article class="phase is-active" data-phase="0" role="button" tabindex="0" aria-pressed="true">
+              <span class="phase-step">01</span>
+              <h3 id="phaseTitle1">接收请求与路由</h3>
+              <p id="phaseText1">HTTP、鉴权、队列、批处理策略先进入 CPU 和系统内存。</p>
+              <div class="chips" id="phaseChips1"><span class="chip cpu">CPU</span><span class="chip ram">内存</span></div>
+            </article>
+            <article class="phase" data-phase="1" role="button" tabindex="0" aria-pressed="false">
+              <span class="phase-step">02</span>
+              <h3 id="phaseTitle2">分词与张量准备</h3>
+              <p id="phaseText2">文本变成 token，再构造模型需要的输入张量和 mask。</p>
+              <div class="chips" id="phaseChips2"><span class="chip cpu">CPU</span><span class="chip ram">内存</span></div>
+            </article>
+            <article class="phase" data-phase="2" role="button" tabindex="0" aria-pressed="false">
+              <span class="phase-step">03</span>
+              <h3 id="phaseTitle3">Prefill 处理 prompt</h3>
+              <p id="phaseText3">长 prompt 可以并行计算，首 token 延迟主要在这里积累。</p>
+              <div class="chips" id="phaseChips3"><span class="chip accel">GPU/NPU</span><span class="chip vram">显存</span></div>
+            </article>
+            <article class="phase" data-phase="3" role="button" tabindex="0" aria-pressed="false">
+              <span class="phase-step">04</span>
+              <h3 id="phaseTitle4">Decode 逐 token 生成</h3>
+              <p id="phaseText4">每生成一个 token 都要读权重和 KV cache，吞吐受带宽与缓存影响。</p>
+              <div class="chips" id="phaseChips4"><span class="chip accel">GPU/NPU</span><span class="chip vram">显存</span></div>
+            </article>
+            <article class="phase" data-phase="4" role="button" tabindex="0" aria-pressed="false">
+              <span class="phase-step">05</span>
+              <h3 id="phaseTitle5">采样与流式返回</h3>
+              <p id="phaseText5">CPU 完成采样、停止条件、格式化，再把结果流式发回客户端。</p>
+              <div class="chips" id="phaseChips5"><span class="chip cpu">CPU</span><span class="chip ram">内存</span></div>
+            </article>
+          </div>
+
+          <div class="rail-map" aria-label="硬件参与强度">
+            <div class="rail-labels" id="railLabels">
+            </div>
+            <div class="rails" id="railBars">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="panel" aria-label="资源估算器">
+        <div class="panel-header">
+          <div class="panel-title">
+            <h2>资源依赖估算器</h2>
+            <p id="estimatorLead">输入模型参数和运行目标，反推平稳运行需要的 CPU、内存、GPU/NPU 与显存规格。</p>
+          </div>
+        </div>
+        <div class="simulator">
+          <div class="scenario-grid" aria-label="场景预设">
+            <button class="scenario is-active" type="button" data-scenario="starter">快速体验</button>
+            <button class="scenario" type="button" data-scenario="workstation">工作站</button>
+            <button class="scenario" type="button" data-scenario="long">长上下文</button>
+            <button class="scenario" type="button" data-scenario="batch">高并发</button>
+          </div>
+
+          <div class="control-stack">
+            <div class="input-grid" aria-label="模型参数输入">
+              <label class="number-field" for="modelParams">
+                <span id="modelParamsLabel">参数量 B</span>
+                <input id="modelParams" type="number" min="1" max="240" step="0.1" value="7" inputmode="decimal">
+              </label>
+              <label class="number-field" for="modelLayers">
+                <span id="modelLayersLabel">层数</span>
+                <input id="modelLayers" type="number" min="1" max="160" step="1" value="32" inputmode="numeric">
+              </label>
+              <label class="number-field" for="kvHeads">
+                <span id="kvHeadsLabel">KV 头数</span>
+                <input id="kvHeads" type="number" min="1" max="128" step="1" value="32" inputmode="numeric">
+              </label>
+              <label class="number-field" for="headDim">
+                <span id="headDimLabel">Head dim</span>
+                <input id="headDim" type="number" min="32" max="256" step="8" value="128" inputmode="numeric">
+              </label>
+            </div>
+            <div class="control">
+              <label>权重量化</label>
+              <div class="segmented" role="group" aria-label="权重量化">
+                <button type="button" class="is-active" data-quant="4">INT4</button>
+                <button type="button" data-quant="8">INT8</button>
+                <button type="button" data-quant="16">FP16</button>
+              </div>
+            </div>
+            <div class="control">
+              <label for="contextTokens"><span id="contextLabel">上下文长度</span> <output id="contextOut">4K</output></label>
+              <input id="contextTokens" type="range" min="4" max="128" step="4" value="4">
+            </div>
+            <div class="control">
+              <label for="concurrency"><span id="concurrencyLabel">并发会话</span> <output id="concurrencyOut">1</output></label>
+              <input id="concurrency" type="range" min="1" max="16" step="1" value="1">
+            </div>
+            <div class="control">
+              <label for="targetTps"><span id="targetTpsLabel">目标速度</span> <output id="targetTpsOut">20 token/s/会话</output></label>
+              <input id="targetTps" type="range" min="4" max="80" step="2" value="20">
+            </div>
+            <div class="control">
+              <label for="vramCap"><span id="vramCapLabel">现有显存容量</span> <output id="vramCapOut">16 GB</output></label>
+              <input id="vramCap" type="range" min="8" max="192" step="8" value="16">
+            </div>
+            <div class="control">
+              <label for="ramCap"><span id="ramCapLabel">现有系统内存</span> <output id="ramCapOut">32 GB</output></label>
+              <input id="ramCap" type="range" min="16" max="256" step="16" value="32">
+            </div>
+            <label class="toggle-row" for="kv8" id="kv8Label">
+              <span id="kv8LabelText">KV cache 使用 8-bit</span>
+              <input id="kv8" type="checkbox">
+            </label>
+          </div>
+
+          <div class="metrics">
+            <div class="metric"><span id="weightMetricLabel">权重显存</span><strong id="weightGb">4.0 GB</strong></div>
+            <div class="metric"><span id="kvMetricLabel">KV cache</span><strong id="kvGb">2.1 GB</strong></div>
+            <div class="metric"><span id="totalMetricLabel">总显存需求</span><strong id="totalVramGb">7.3 GB</strong></div>
+            <div class="metric"><span id="ramMetricLabel">运行内存估算</span><strong id="ramGb">11 GB</strong></div>
+          </div>
+
+          <div class="spec-grid" aria-label="平稳运行建议规格">
+            <div class="spec-card" style="--spec-color: var(--cpu)">
+              <span id="cpuSpecLabel">CPU 建议</span>
+              <strong id="cpuSpec">8 核</strong>
+              <small id="cpuSpecNote">负责调度、分词、采样和流式输出。</small>
+            </div>
+            <div class="spec-card" style="--spec-color: var(--ram)">
+              <span id="ramSpecLabel">内存建议</span>
+              <strong id="ramSpec">16 GB</strong>
+              <small id="ramSpecNote">保留加载、队列和系统余量。</small>
+            </div>
+            <div class="spec-card" style="--spec-color: var(--accel)">
+              <span id="accelSpecLabel">GPU/NPU 建议</span>
+              <strong id="accelSpec">入门级</strong>
+              <small id="accelSpecNote">看有效算力和显存带宽。</small>
+            </div>
+            <div class="spec-card" style="--spec-color: var(--vram)">
+              <span id="vramSpecLabel">显存建议</span>
+              <strong id="vramSpec">12 GB</strong>
+              <small id="vramSpecNote">权重、KV cache 和 workspace 留余量。</small>
+            </div>
+          </div>
+
+          <div class="pressure-list" aria-label="资源压力">
+            <div class="pressure"><span id="cpuPressureLabel">CPU</span><div class="bar"><span id="cpuBar" style="--bar-color: var(--cpu); --value: 20%"></span></div><span id="cpuPct">20%</span></div>
+            <div class="pressure"><span id="ramPressureLabel">内存</span><div class="bar"><span id="ramBar" style="--bar-color: var(--ram); --value: 34%"></span></div><span id="ramPct">34%</span></div>
+            <div class="pressure"><span id="accelPressureLabel">GPU/NPU</span><div class="bar"><span id="accelBar" style="--bar-color: var(--accel); --value: 28%"></span></div><span id="accelPct">28%</span></div>
+            <div class="pressure"><span id="vramPressureLabel">显存</span><div class="bar"><span id="vramBar" style="--bar-color: var(--vram); --value: 45%"></span></div><span id="vramPct">45%</span></div>
+          </div>
+
+          <div class="bottleneck" id="bottleneck">
+            <strong>瓶颈预测：显存余量充足</strong>
+            当前配置适合单用户推理，首 token 延迟主要来自 prefill。
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section id="fivewoneh" class="section" aria-labelledby="fivewoneh-title">
+      <div class="section-heading">
+        <h2 id="fivewoneh-title">5W1H 看推理</h2>
+        <p id="fivewonehLead">把“模型为什么慢、为什么吃显存、为什么并发上不去”拆成六个问题，更容易定位硬件瓶颈。</p>
+      </div>
+      <div class="question-grid">
+        <article class="question-card">
+          <span class="key">What</span>
+          <h3 id="questionTitle1">推理是什么</h3>
+          <p id="questionText1">加载训练好的权重，把输入 token 变成下一个 token 的概率分布，再循环生成答案。</p>
+        </article>
+        <article class="question-card">
+          <span class="key">Why</span>
+          <h3 id="questionTitle2">为什么依赖硬件</h3>
+          <p id="questionText2">大部分时间在矩阵乘和注意力上，容量不足会 OOM，带宽不足会拖慢每个 token。</p>
+        </article>
+        <article class="question-card">
+          <span class="key">Who</span>
+          <h3 id="questionTitle3">谁在参与</h3>
+          <p id="questionText3">CPU、系统内存、GPU/NPU、显存共同工作；四者任一短板都会限制延迟、吞吐或上下文。</p>
+        </article>
+        <article class="question-card">
+          <span class="key">When</span>
+          <h3 id="questionTitle4">什么时候消耗最多</h3>
+          <p id="questionText4">Prefill 消耗计算和显存带宽，Decode 反复读权重和 KV cache，高并发时缓存增长最快。</p>
+        </article>
+        <article class="question-card">
+          <span class="key">Where</span>
+          <h3 id="questionTitle5">数据在哪里流动</h3>
+          <p id="questionText5">请求和 token 在内存，张量进入显存，算子在 GPU/NPU，采样和返回再回到 CPU。</p>
+        </article>
+        <article class="question-card">
+          <span class="key">How</span>
+          <h3 id="questionTitle6">如何优化</h3>
+          <p id="questionText6">选合适模型规模，量化权重，限制上下文，控制并发，使用批处理、paged attention 和 KV cache 策略。</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="hardware" class="section" aria-labelledby="hardware-title">
+      <div class="section-heading">
+        <h2 id="hardware-title">四大硬件关系</h2>
+        <p id="hardwareLead">推理性能不是单看某个部件峰值，而是看数据能否稳定穿过整条链路。</p>
+      </div>
+      <div class="hardware-grid">
+        <article class="hardware-card" style="--hardware-color: var(--cpu)">
+          <div class="hardware-icon" aria-hidden="true">
+            <svg viewBox="0 0 48 48"><rect x="12" y="12" width="24" height="24" rx="3"></rect><path d="M18 6v6M24 6v6M30 6v6M18 36v6M24 36v6M30 36v6M6 18h6M6 24h6M6 30h6M36 18h6M36 24h6M36 30h6"></path></svg>
+          </div>
+          <h3 id="hardwareTitle1">CPU：控制面</h3>
+          <p id="hardwareText1">负责请求生命周期、分词、调度、采样、日志与网络 I/O。高并发或复杂后处理会让 CPU 先排队。</p>
+          <ul id="hardwareList1">
+            <li>影响排队时间和首 token 前准备</li>
+            <li>CPU-only 推理可行但通常吞吐低</li>
+          </ul>
+        </article>
+        <article class="hardware-card" style="--hardware-color: var(--ram)">
+          <div class="hardware-icon" aria-hidden="true">
+            <svg viewBox="0 0 48 48"><rect x="8" y="14" width="32" height="20" rx="3"></rect><path d="M13 10v4M19 10v4M25 10v4M31 10v4M13 34v4M19 34v4M25 34v4M31 34v4M14 24h20"></path></svg>
+          </div>
+          <h3 id="hardwareTitle2">内存：承接面</h3>
+          <p id="hardwareText2">保存服务进程、请求队列、token、权重映射和 CPU offload 数据。内存不足会触发交换或直接失败。</p>
+          <ul id="hardwareList2">
+            <li>影响稳定性和并发承载</li>
+            <li>离线加载大模型时很关键</li>
+          </ul>
+        </article>
+        <article class="hardware-card" style="--hardware-color: var(--accel)">
+          <div class="hardware-icon" aria-hidden="true">
+            <svg viewBox="0 0 48 48"><path d="M9 30c6-18 24-18 30 0"></path><path d="M14 30h20M24 14v20M18 20l12 12M30 20L18 32"></path><circle cx="24" cy="24" r="15"></circle></svg>
+          </div>
+          <h3 id="hardwareTitle3">GPU/NPU：计算面</h3>
+          <p id="hardwareText3">执行矩阵乘、注意力、归一化等核心算子。GPU 更通用，NPU 常在 INT8/INT4 上能效高但算子支持更挑剔。</p>
+          <ul id="hardwareList3">
+            <li>影响 token/s 和 prefill 速度</li>
+            <li>还受内存带宽和 kernel 实现约束</li>
+          </ul>
+        </article>
+        <article class="hardware-card" style="--hardware-color: var(--vram)">
+          <div class="hardware-icon" aria-hidden="true">
+            <svg viewBox="0 0 48 48"><rect x="9" y="11" width="30" height="26" rx="3"></rect><path d="M15 17h18M15 24h18M15 31h10M39 18h4M39 24h4M39 30h4M5 18h4M5 24h4M5 30h4"></path></svg>
+          </div>
+          <h3 id="hardwareTitle4">显存：容量面</h3>
+          <p id="hardwareText4">承载模型权重、KV cache、激活和临时 workspace。显存通常决定可跑多大模型、多长上下文、多高并发。</p>
+          <ul id="hardwareList4">
+            <li>权重受量化影响最大</li>
+            <li>KV cache 随上下文和并发线性增长</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="matrix-title">
+      <div class="section-heading">
+        <h2 id="matrix-title">资源依赖矩阵</h2>
+        <p id="matrixLead">同一项任务会同时消耗多个硬件维度，表中的“强/中/弱”表示最常见的压力来源。</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>推理要素</th>
+              <th id="matrixHeadCpu">CPU</th>
+              <th id="matrixHeadRam">内存</th>
+              <th id="matrixHeadAccel">GPU/NPU</th>
+              <th id="matrixHeadVram">显存</th>
+            </tr>
+          </thead>
+          <tbody id="matrixBody">
+            <tr>
+              <td>模型权重加载</td>
+              <td><span class="level mid">中</span>解析、映射、调度加载</td>
+              <td><span class="level high">强</span>文件缓存、mmap、offload</td>
+              <td><span class="level low">弱</span>加载后参与计算</td>
+              <td><span class="level high">强</span>权重常驻，量化直接降低占用</td>
+            </tr>
+            <tr>
+              <td>Prefill 长 prompt</td>
+              <td><span class="level mid">中</span>分词和提交任务</td>
+              <td><span class="level mid">中</span>token 与请求缓冲</td>
+              <td><span class="level high">强</span>大规模并行计算</td>
+              <td><span class="level high">强</span>注意力、激活、KV 写入</td>
+            </tr>
+            <tr>
+              <td>Decode 逐 token</td>
+              <td><span class="level mid">中</span>采样、停止条件、流式输出</td>
+              <td><span class="level low">弱</span>小量状态数据</td>
+              <td><span class="level high">强</span>重复执行每层算子</td>
+              <td><span class="level high">强</span>反复读取权重和 KV cache</td>
+            </tr>
+            <tr>
+              <td>上下文长度</td>
+              <td><span class="level low">弱</span>分词时间随 token 增长</td>
+              <td><span class="level mid">中</span>请求与缓存元数据增长</td>
+              <td><span class="level mid">中</span>注意力计算随序列变重</td>
+              <td><span class="level high">强</span>KV cache 近似线性增长</td>
+            </tr>
+            <tr>
+              <td>并发和批处理</td>
+              <td><span class="level high">强</span>队列、调度、采样压力上升</td>
+              <td><span class="level high">强</span>会话状态和缓冲成倍增长</td>
+              <td><span class="level high">强</span>利用率上升，延迟也可能上升</td>
+              <td><span class="level high">强</span>每个会话都占 KV cache</td>
+            </tr>
+            <tr>
+              <td>量化与算子支持</td>
+              <td><span class="level low">弱</span>主要负责选择路径</td>
+              <td><span class="level mid">中</span>权重文件和加载峰值降低</td>
+              <td><span class="level high">强</span>取决于 kernel 和硬件指令</td>
+              <td><span class="level high">强</span>权重占用和带宽压力下降</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note" id="matrixNote">估算器中的 KV cache 使用“层数 × 上下文 token × 并发 × K/V × KV 头数 × head dim × KV 精度”近似计算；推荐规格会额外预留稳态余量。实际结果还会因 GQA/MQA、paged attention、框架实现、batch 策略和具体硬件 kernel 而变化。</p>
+    </section>
+
+    <section id="rules" class="section" aria-labelledby="rules-title">
+      <div class="section-heading">
+        <h2 id="rules-title">快速判断规则</h2>
+        <p id="rulesLead">遇到延迟、OOM 或吞吐不足时，可以先按下面的症状定位。</p>
+      </div>
+      <div class="rule-grid" id="rulesGrid">
+        <article class="rule">
+          <strong>显存爆了</strong>
+          <p>先降模型规模或权重量化，再缩短上下文和并发；KV cache 通常是长上下文的核心变量。</p>
+        </article>
+        <article class="rule">
+          <strong>首 token 很慢</strong>
+          <p>重点看 prompt 长度、prefill 吞吐、CPU 分词和排队；长文档场景可考虑缓存 prompt。</p>
+        </article>
+        <article class="rule">
+          <strong>生成 token/s 低</strong>
+          <p>重点看 GPU/NPU 利用率、显存带宽、量化 kernel、batch 策略和模型大小。</p>
+        </article>
+        <article class="rule">
+          <strong>并发上不去</strong>
+          <p>重点看 CPU 调度、系统内存、KV cache 总量和请求队列；吞吐优化常伴随单请求延迟上升。</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    const transformerArchitectures = {
+      "cpu-lpddr": {
+        name: "CPU + LPDDR 内存",
+        pageLead: "用 5W1H 拆解 CPU-only 推理：CPU 同时负责调度和矩阵计算，LPDDR 统一承载权重、KV cache、激活和系统任务，带宽与容量共同决定上限。",
+        flowTitle: "CPU + LPDDR 架构下请求如何流动",
+        flowLead: "没有独立加速器和独立显存，prefill 与 decode 都在 CPU 上执行，所有模型数据都从 LPDDR 读取。",
+        flowBadge: "CPU-only + Unified LPDDR",
+        legends: [
+          "CPU：调度、分词、采样、矩阵计算",
+          "LPDDR：请求、权重、KV cache、激活",
+          "CPU 向量单元：AVX/AMX/NEON 等算子",
+          "LPDDR 预算：模型工作集与系统共享"
+        ],
+        labels: {
+          cpu: "CPU",
+          ram: "LPDDR",
+          accel: "CPU向量",
+          vram: "LPDDR预算"
+        },
+        phases: [
+          { title: "接收请求与路由", text: "HTTP、鉴权、队列和批处理策略进入 CPU，状态和输入 token 保存在 LPDDR。", chips: [["cpu", "CPU"], ["ram", "LPDDR"]] },
+          { title: "分词与张量准备", text: "CPU 完成分词、mask 和张量准备；准备好的输入仍在 LPDDR 中。", chips: [["cpu", "CPU"], ["ram", "LPDDR"]] },
+          { title: "Prefill 处理 prompt", text: "长 prompt 的矩阵乘由 CPU 向量/矩阵指令执行，LPDDR 带宽会明显影响首 token 延迟。", chips: [["accel", "CPU向量"], ["ram", "LPDDR"]] },
+          { title: "Decode 逐 token 生成", text: "每个 token 都要从 LPDDR 读取权重与 KV cache，CPU 算力和内存带宽同时成为瓶颈。", chips: [["accel", "CPU向量"], ["ram", "LPDDR"]] },
+          { title: "采样与流式返回", text: "采样、停止条件和流式输出继续由 CPU 完成，高并发会放大调度压力。", chips: [["cpu", "CPU"], ["ram", "LPDDR"]] }
+        ],
+        rails: [
+          { key: "cpu", label: "CPU", color: "cpu", values: [58, 64, 82, 88, 72] },
+          { key: "ram", label: "LPDDR", color: "ram", values: [42, 56, 74, 82, 48] },
+          { key: "accel", label: "CPU向量", color: "accel", values: [18, 34, 92, 96, 34] }
+        ],
+        estimatorLead: "输入模型参数和运行目标，反推 CPU 核心数、LPDDR 总容量、CPU 等效算力与推理内存预算。",
+        controls: {
+          vramCapLabel: "现有推理内存预算",
+          ramCapLabel: "现有 LPDDR 总容量",
+          kv8Label: "KV cache 使用 8-bit 存在 LPDDR"
+        },
+        metrics: {
+          weight: "权重 LPDDR 占用",
+          kv: "KV cache",
+          total: "模型工作集",
+          ram: "LPDDR 总占用"
+        },
+        specs: {
+          cpu: "CPU 建议",
+          ram: "LPDDR 容量建议",
+          accel: "CPU 计算能力建议",
+          vram: "推理内存预算"
+        },
+        pressures: {
+          cpu: "CPU调度",
+          ram: "LPDDR容量",
+          accel: "CPU计算",
+          vram: "LPDDR预算"
+        },
+        fivewonehLead: "在 CPU + LPDDR 架构里，“能不能跑”和“跑得快不快”主要由 CPU 核心、向量指令、LPDDR 容量和带宽共同决定。",
+        questions: [
+          ["推理是什么", "加载模型权重后，CPU 逐层计算下一个 token 的概率，并把所有中间状态放在 LPDDR。"],
+          ["为什么依赖硬件", "CPU 算力决定 token/s，LPDDR 容量决定模型与上下文边界，LPDDR 带宽决定 decode 时反复读权重的速度。"],
+          ["谁在参与", "CPU 承担控制面和计算面，LPDDR 同时承担系统内存、模型权重、KV cache 和激活数据。"],
+          ["什么时候消耗最多", "Prefill 会吃 CPU 算力，Decode 会持续吃 LPDDR 带宽，长上下文会快速放大 LPDDR 占用。"],
+          ["数据在哪里流动", "请求、token、权重、KV cache 和临时张量都在 LPDDR 中，CPU cache 只能缓解热点数据访问。"],
+          ["如何优化", "优先使用 INT4/INT8、降低上下文和并发，选择支持高效 CPU kernel 的推理框架，并关注 LPDDR 带宽。"]
+        ],
+        hardwareLead: "CPU-only 推理的关键不是有没有显卡，而是 CPU 算力、LPDDR 容量和带宽是否撑得住模型工作集。",
+        hardware: [
+          ["CPU：控制面 + 计算面", "CPU 同时负责请求生命周期、分词、调度、采样和矩阵计算。核心数、频率、缓存和向量指令都会影响吞吐。", ["影响排队时间、首 token 和 token/s", "适合小模型、低并发和轻量边缘部署"]],
+          ["LPDDR：统一承接面", "LPDDR 保存服务进程、权重、KV cache、激活和请求队列。容量不足会直接 OOM 或触发交换。", ["决定可加载模型、上下文长度和并发", "带宽不足会拖慢每 token 解码"]],
+          ["CPU 向量单元：算子面", "AVX、AMX、NEON 或类似矩阵指令决定 CPU 推理的有效算力，框架 kernel 适配很关键。", ["影响 prefill 和 decode 的计算速度", "量化 kernel 质量决定能否吃满硬件"]],
+          ["LPDDR：容量边界", "没有独立显存，模型权重、KV cache、激活和系统任务都占用 LPDDR。", ["需要给系统和服务进程预留余量", "长上下文和高并发会快速挤占空间"]]
+        ],
+        matrixLead: "CPU + LPDDR 架构中，表里的“LPDDR预算”代表推理可安全使用的 LPDDR 空间，不是独立显存。",
+        matrixHeads: ["CPU", "LPDDR", "CPU向量", "LPDDR预算"],
+        matrixRows: [
+          ["模型权重加载", ["<span class=\"level mid\">中</span>解析、mmap、加载调度", "<span class=\"level high\">强</span>权重文件和页缓存占用", "<span class=\"level low\">弱</span>加载后参与计算", "<span class=\"level high\">强</span>权重常驻在 LPDDR"]],
+          ["Prefill 长 prompt", ["<span class=\"level high\">强</span>CPU 直接执行大量矩阵乘", "<span class=\"level mid\">中</span>输入和激活缓冲增长", "<span class=\"level high\">强</span>向量/矩阵指令利用率关键", "<span class=\"level mid\">中</span>KV 写入和临时张量占用"]],
+          ["Decode 逐 token", ["<span class=\"level high\">强</span>每 token 都要调度和计算", "<span class=\"level high\">强</span>持续读取权重和 KV cache", "<span class=\"level high\">强</span>小 batch 下效率更敏感", "<span class=\"level high\">强</span>KV cache 随会话持续增长"]],
+          ["上下文长度", ["<span class=\"level mid\">中</span>分词与注意力成本上升", "<span class=\"level high\">强</span>KV cache 线性增长", "<span class=\"level mid\">中</span>长序列算子变重", "<span class=\"level high\">强</span>直接压缩可用内存预算"]],
+          ["并发和批处理", ["<span class=\"level high\">强</span>调度、采样和计算都上升", "<span class=\"level high\">强</span>会话状态成倍增长", "<span class=\"level high\">强</span>批处理效率和延迟权衡", "<span class=\"level high\">强</span>多个 KV cache 共同占用"]],
+          ["量化与算子支持", ["<span class=\"level high\">强</span>需要高效 CPU 量化 kernel", "<span class=\"level mid\">中</span>权重和缓存占用下降", "<span class=\"level high\">强</span>决定是否能利用向量指令", "<span class=\"level high\">强</span>降低模型工作集和带宽压力"]]
+        ],
+        note: "CPU + LPDDR 估算把权重、KV cache、激活和 workspace 都计入 LPDDR 预算；实际表现会受 CPU cache、NUMA、LPDDR 带宽、量化 kernel 和线程绑定策略影响。",
+        rulesLead: "CPU-only 场景遇到慢或 OOM，先看 CPU 算力、LPDDR 容量和 LPDDR 带宽。",
+        rules: [
+          ["LPDDR 不够", "先降模型规模或量化，再缩短上下文和并发；给系统、页缓存和服务进程留下余量。"],
+          ["首 token 很慢", "重点看 prompt 长度、CPU 线程数、prefill kernel 和内存带宽。"],
+          ["生成 token/s 低", "重点看 CPU 向量指令、量化 kernel、线程绑定、batch 策略和 LPDDR 带宽。"],
+          ["并发上不去", "重点看 CPU 调度、KV cache 总量和 LPDDR 余量；并发越高越容易互相抢带宽。"]
+        ],
+        compute: {
+          dedicatedVram: false,
+          cpuMultiplier: 1.75,
+          computeMultiplier: 2.25,
+          bandwidthMultiplier: 1.65,
+          referenceTops: 35,
+          referenceBandwidth: 220,
+          cpuReferenceCores: 48,
+          modelBudgetLoad: 0.70,
+          ramLoad: 0.62,
+          ramIncludesModel: true,
+          bandwidthLabel: "LPDDR 带宽"
+        }
+      },
+      "npu-unified": {
+        name: "CPU + 边缘 NPU 统一 LPDDR 内存",
+        pageLead: "用 5W1H 拆解边缘 NPU 推理：CPU 负责控制和后处理，NPU 执行量化矩阵算子，LPDDR 是 CPU 与 NPU 共享的统一内存池。",
+        flowTitle: "CPU + 边缘 NPU 统一内存下请求如何流动",
+        flowLead: "权重和 KV cache 通常在 LPDDR 中被 NPU 访问，没有独立 GDDR；性能取决于 NPU 算子支持、DMA/驱动开销和共享内存带宽。",
+        flowBadge: "Edge NPU + Unified LPDDR",
+        legends: [
+          "CPU：调度、分词、采样、驱动提交",
+          "LPDDR：CPU/NPU 共享数据池",
+          "边缘 NPU：INT8/INT4 矩阵算子",
+          "LPDDR 预算：权重、KV cache、激活"
+        ],
+        labels: {
+          cpu: "CPU",
+          ram: "LPDDR",
+          accel: "边缘NPU",
+          vram: "LPDDR预算"
+        },
+        phases: [
+          { title: "接收请求与路由", text: "CPU 处理网络、鉴权和队列，输入与会话状态进入 LPDDR。", chips: [["cpu", "CPU"], ["ram", "LPDDR"]] },
+          { title: "分词与张量准备", text: "CPU 完成分词和张量打包，再把 NPU 可接受的量化输入提交给驱动。", chips: [["cpu", "CPU"], ["ram", "LPDDR"]] },
+          { title: "Prefill 处理 prompt", text: "NPU 执行支持的矩阵和注意力算子，LPDDR 带宽和驱动提交开销共同影响首 token。", chips: [["accel", "边缘NPU"], ["ram", "LPDDR"]] },
+          { title: "Decode 逐 token 生成", text: "NPU 逐 token 读取权重和 KV cache；若算子不支持，部分层可能回退到 CPU。", chips: [["accel", "边缘NPU"], ["ram", "LPDDR"]] },
+          { title: "采样与流式返回", text: "CPU 取回 logits、采样、检查停止条件并流式输出，NPU 继续等待下一轮提交。", chips: [["cpu", "CPU"], ["accel", "边缘NPU"]] }
+        ],
+        rails: [
+          { key: "cpu", label: "CPU", color: "cpu", values: [58, 62, 46, 44, 72] },
+          { key: "ram", label: "LPDDR", color: "ram", values: [42, 54, 78, 84, 50] },
+          { key: "accel", label: "边缘NPU", color: "accel", values: [18, 44, 94, 96, 58] }
+        ],
+        estimatorLead: "输入模型参数和运行目标，反推 CPU、LPDDR、边缘 NPU 有效算力与 NPU 可用共享内存预算。",
+        controls: {
+          vramCapLabel: "NPU 可用 LPDDR 预算",
+          ramCapLabel: "现有 LPDDR 总容量",
+          kv8Label: "KV cache 使用 8-bit 共享给 NPU"
+        },
+        metrics: {
+          weight: "权重共享内存",
+          kv: "KV cache",
+          total: "NPU工作集",
+          ram: "LPDDR总占用"
+        },
+        specs: {
+          cpu: "CPU 建议",
+          ram: "LPDDR 容量建议",
+          accel: "边缘 NPU 建议",
+          vram: "NPU LPDDR预算"
+        },
+        pressures: {
+          cpu: "CPU调度",
+          ram: "LPDDR容量",
+          accel: "NPU计算",
+          vram: "LPDDR预算"
+        },
+        fivewonehLead: "边缘 NPU 架构的核心问题是：NPU 是否支持模型算子，LPDDR 是否能同时满足 CPU、NPU 和 KV cache 的访问。",
+        questions: [
+          ["推理是什么", "CPU 编排请求并提交张量，NPU 对支持的量化算子加速，结果再回到 CPU 采样输出。"],
+          ["为什么依赖硬件", "NPU TOPS 决定算子吞吐，LPDDR 容量和带宽决定模型工作集，CPU 决定调度与回退成本。"],
+          ["谁在参与", "CPU、边缘 NPU 和 LPDDR 共同工作；没有独立显存，NPU 与系统共享内存预算。"],
+          ["什么时候消耗最多", "Prefill 会集中占用 NPU，Decode 会反复读共享权重和 KV cache，高并发会放大 LPDDR 争用。"],
+          ["数据在哪里流动", "请求在 CPU，权重和 KV cache 在 LPDDR，NPU 通过驱动/DMA 访问共享内存并返回 logits。"],
+          ["如何优化", "选择 NPU 支持的量化格式，减少 CPU 回退，控制上下文和并发，并保留足够共享内存预算。"]
+        ],
+        hardwareLead: "边缘 NPU 推理不是简单看 TOPS，还要看算子覆盖、共享 LPDDR 带宽、驱动提交和 CPU 回退比例。",
+        hardware: [
+          ["CPU：控制与回退面", "CPU 负责请求、分词、采样、驱动提交和不支持算子的回退执行。", ["影响排队、提交开销和后处理", "回退比例高时 CPU 会重新成为瓶颈"]],
+          ["LPDDR：统一共享面", "LPDDR 同时服务 CPU、NPU、系统和模型工作集。容量和带宽都会影响稳定性。", ["决定模型、上下文和并发上限", "共享访问会带来带宽争用"]],
+          ["边缘 NPU：低功耗计算面", "NPU 擅长 INT8/INT4 矩阵算子，但对模型结构、算子和 batch 形态更挑剔。", ["影响能效和 token/s", "算子不支持会触发 CPU 回退"]],
+          ["LPDDR预算：容量边界", "NPU 没有独立 GDDR，权重、KV cache 和激活占用 LPDDR 中的一段可用预算。", ["需要给 OS、应用和 CPU 任务留余量", "KV cache 随上下文和并发线性增长"]]
+        ],
+        matrixLead: "边缘 NPU 架构中，NPU 算力、算子覆盖和共享 LPDDR 预算需要一起看。",
+        matrixHeads: ["CPU", "LPDDR", "边缘NPU", "LPDDR预算"],
+        matrixRows: [
+          ["模型权重加载", ["<span class=\"level mid\">中</span>解析、校验、驱动准备", "<span class=\"level high\">强</span>权重文件和共享映射", "<span class=\"level mid\">中</span>需要可执行图和权重格式", "<span class=\"level high\">强</span>权重占用 LPDDR 预算"]],
+          ["Prefill 长 prompt", ["<span class=\"level mid\">中</span>提交任务和处理回退", "<span class=\"level high\">强</span>输入、激活、KV 写入", "<span class=\"level high\">强</span>矩阵和注意力算子集中运行", "<span class=\"level high\">强</span>临时张量和 KV 写入增长"]],
+          ["Decode 逐 token", ["<span class=\"level mid\">中</span>采样和逐轮提交", "<span class=\"level high\">强</span>持续读取权重和 KV cache", "<span class=\"level high\">强</span>小 batch 效率依赖 runtime", "<span class=\"level high\">强</span>每个会话占用 KV cache"]],
+          ["上下文长度", ["<span class=\"level low\">弱</span>分词和控制成本上升", "<span class=\"level high\">强</span>KV cache 线性增长", "<span class=\"level mid\">中</span>长序列算子更重", "<span class=\"level high\">强</span>LPDDR 预算快速被占用"]],
+          ["并发和批处理", ["<span class=\"level high\">强</span>队列、提交和采样压力", "<span class=\"level high\">强</span>多个会话抢共享带宽", "<span class=\"level high\">强</span>利用率提升但延迟可能上升", "<span class=\"level high\">强</span>多个 KV cache 叠加"]],
+          ["量化与算子支持", ["<span class=\"level mid\">中</span>负责选择执行路径", "<span class=\"level mid\">中</span>权重和缓存占用下降", "<span class=\"level high\">强</span>NPU 是否支持决定能否加速", "<span class=\"level high\">强</span>降低 LPDDR 预算和带宽压力"]]
+        ],
+        note: "边缘 NPU 估算假设权重、KV cache 和激活占用 LPDDR 预算；实际表现会受 NPU 算子覆盖、驱动/runtime、DMA 开销、LPDDR 带宽和 CPU 回退比例影响。",
+        rulesLead: "边缘 NPU 场景遇到慢或 OOM，先区分是 NPU 算力不足、算子回退，还是 LPDDR 预算不足。",
+        rules: [
+          ["共享内存不够", "先降模型规模、量化和上下文；NPU、CPU 和系统都要共享 LPDDR。"],
+          ["首 token 很慢", "重点看 prompt 长度、NPU 图编译/提交开销、prefill 算子覆盖和 CPU 回退。"],
+          ["生成 token/s 低", "重点看 NPU 利用率、LPDDR 带宽、量化格式和 runtime 对小 batch 的支持。"],
+          ["并发上不去", "重点看提交队列、KV cache 总量、LPDDR 争用和 CPU 后处理压力。"]
+        ],
+        compute: {
+          dedicatedVram: false,
+          cpuMultiplier: 1.0,
+          computeMultiplier: 0.95,
+          bandwidthMultiplier: 1.25,
+          referenceTops: 60,
+          referenceBandwidth: 180,
+          cpuReferenceCores: 24,
+          modelBudgetLoad: 0.68,
+          ramLoad: 0.62,
+          ramIncludesModel: true,
+          bandwidthLabel: "共享 LPDDR 带宽"
+        }
+      },
+      "dgpu-gddr": {
+        name: "CPU + LPDDR 内存 + 独立 GPU（GDDR 显存）",
+        pageLead: "用 5W1H 拆解独显推理：CPU 负责组织和后处理，LPDDR 承接系统侧数据，独立 GPU 执行核心算子，GDDR 显存决定模型、上下文与并发边界。",
+        flowTitle: "独立 GPU + GDDR 架构下请求如何流动",
+        flowLead: "模型权重和 KV cache 主要常驻 GDDR，CPU 与 LPDDR 负责请求编排、分词和采样，PCIe/驱动只应出现在边界传输上。",
+        flowBadge: "dGPU + GDDR",
+        legends: [
+          "CPU：调度、分词、采样、I/O",
+          "LPDDR：请求、权重映射、系统缓冲",
+          "独立 GPU：矩阵乘、注意力、算子",
+          "GDDR 显存：权重、KV cache、激活"
+        ],
+        labels: {
+          cpu: "CPU",
+          ram: "LPDDR",
+          accel: "独立GPU",
+          vram: "GDDR"
+        },
+        phases: [
+          { title: "接收请求与路由", text: "HTTP、鉴权、队列、批处理策略先进入 CPU 和 LPDDR。", chips: [["cpu", "CPU"], ["ram", "LPDDR"]] },
+          { title: "分词与张量准备", text: "CPU 完成分词和输入张量准备，再把必要张量提交到 GPU。", chips: [["cpu", "CPU"], ["ram", "LPDDR"]] },
+          { title: "Prefill 处理 prompt", text: "GPU 在 GDDR 中并行处理长 prompt，首 token 延迟主要取决于 GPU 算力和显存带宽。", chips: [["accel", "独立GPU"], ["vram", "GDDR"]] },
+          { title: "Decode 逐 token 生成", text: "每个 token 都要读 GDDR 中的权重和 KV cache，吞吐受 GPU kernel 与显存带宽影响。", chips: [["accel", "独立GPU"], ["vram", "GDDR"]] },
+          { title: "采样与流式返回", text: "logits 回到 CPU 后完成采样、停止条件和流式返回，GPU 准备下一轮 decode。", chips: [["cpu", "CPU"], ["ram", "LPDDR"]] }
+        ],
+        rails: [
+          { key: "cpu", label: "CPU", color: "cpu", values: [58, 62, 38, 36, 72] },
+          { key: "ram", label: "LPDDR", color: "ram", values: [42, 54, 34, 30, 48] },
+          { key: "accel", label: "独立GPU", color: "accel", values: [18, 44, 94, 96, 46] },
+          { key: "vram", label: "GDDR", color: "vram", values: [20, 36, 86, 94, 42] }
+        ],
+        estimatorLead: "输入模型参数和运行目标，反推 CPU、LPDDR、独立 GPU 等级与 GDDR 显存规格。",
+        controls: {
+          vramCapLabel: "现有 GDDR 显存容量",
+          ramCapLabel: "现有 LPDDR 系统内存",
+          kv8Label: "KV cache 使用 8-bit 存在 GDDR"
+        },
+        metrics: {
+          weight: "权重 GDDR 占用",
+          kv: "KV cache",
+          total: "总 GDDR 需求",
+          ram: "LPDDR 运行内存"
+        },
+        specs: {
+          cpu: "CPU 建议",
+          ram: "LPDDR 内存建议",
+          accel: "独立 GPU 建议",
+          vram: "GDDR 显存建议"
+        },
+        pressures: {
+          cpu: "CPU调度",
+          ram: "LPDDR内存",
+          accel: "GPU计算",
+          vram: "GDDR显存"
+        },
+        fivewonehLead: "独显架构里，CPU 和 LPDDR 负责把请求送上轨道，GPU 和 GDDR 决定核心推理吞吐与容量边界。",
+        questions: [
+          ["推理是什么", "加载权重到 GDDR 后，GPU 逐层计算下一个 token 的概率，CPU 负责采样和返回。"],
+          ["为什么依赖硬件", "GPU 算力和 GDDR 带宽决定 token/s，GDDR 容量决定模型、上下文和并发，CPU 决定编排效率。"],
+          ["谁在参与", "CPU、LPDDR、独立 GPU、GDDR 显存共同工作；任何一环短板都会限制延迟、吞吐或容量。"],
+          ["什么时候消耗最多", "Prefill 集中消耗 GPU 算力，Decode 持续读取 GDDR 权重和 KV cache，高并发让 KV cache 增长最快。"],
+          ["数据在哪里流动", "请求在 LPDDR，核心张量进入 GDDR，算子在 GPU 上执行，采样结果回到 CPU 输出。"],
+          ["如何优化", "选择合适模型规模和量化，控制上下文与并发，使用高效 GPU kernel、paged attention 和 KV cache 策略。"]
+        ],
+        hardwareLead: "独显推理性能不是只看 GPU 峰值，还要看 GDDR 容量、显存带宽、CPU 调度和 LPDDR 侧缓冲是否匹配。",
+        hardware: [
+          ["CPU：控制面", "负责请求生命周期、分词、调度、采样、日志与网络 I/O。高并发或复杂后处理会让 CPU 先排队。", ["影响排队时间和首 token 前准备", "CPU 不应长期承担主矩阵计算"]],
+          ["LPDDR：系统承接面", "保存服务进程、请求队列、token、权重映射和 CPU 侧缓冲。系统内存不足会影响稳定性。", ["影响稳定性和并发承载", "离线加载大模型时仍然关键"]],
+          ["独立 GPU：计算面", "执行矩阵乘、注意力、归一化等核心算子。GPU kernel、batch 策略和显存带宽决定吞吐。", ["影响 token/s 和 prefill 速度", "PCIe 传输应尽量少出现在逐 token 路径"]],
+          ["GDDR 显存：容量面", "承载模型权重、KV cache、激活和 workspace。显存通常决定可跑多大模型、多长上下文、多高并发。", ["权重受量化影响最大", "KV cache 随上下文和并发线性增长"]]
+        ],
+        matrixLead: "独显架构中，表中的“GDDR 显存”是最常见的容量边界，“LPDDR”主要代表系统侧承接能力。",
+        matrixHeads: ["CPU", "LPDDR", "独立GPU", "GDDR显存"],
+        matrixRows: [
+          ["模型权重加载", ["<span class=\"level mid\">中</span>解析、映射、调度加载", "<span class=\"level high\">强</span>文件缓存、mmap、offload", "<span class=\"level low\">弱</span>加载后参与计算", "<span class=\"level high\">强</span>权重常驻，量化直接降低占用"]],
+          ["Prefill 长 prompt", ["<span class=\"level mid\">中</span>分词和提交任务", "<span class=\"level mid\">中</span>token 与请求缓冲", "<span class=\"level high\">强</span>大规模并行计算", "<span class=\"level high\">强</span>注意力、激活、KV 写入"]],
+          ["Decode 逐 token", ["<span class=\"level mid\">中</span>采样、停止条件、流式输出", "<span class=\"level low\">弱</span>小量状态数据", "<span class=\"level high\">强</span>重复执行每层算子", "<span class=\"level high\">强</span>反复读取权重和 KV cache"]],
+          ["上下文长度", ["<span class=\"level low\">弱</span>分词时间随 token 增长", "<span class=\"level mid\">中</span>请求与缓存元数据增长", "<span class=\"level mid\">中</span>注意力计算随序列变重", "<span class=\"level high\">强</span>KV cache 近似线性增长"]],
+          ["并发和批处理", ["<span class=\"level high\">强</span>队列、调度、采样压力上升", "<span class=\"level high\">强</span>会话状态和缓冲成倍增长", "<span class=\"level high\">强</span>利用率上升，延迟也可能上升", "<span class=\"level high\">强</span>每个会话都占 KV cache"]],
+          ["量化与算子支持", ["<span class=\"level low\">弱</span>主要负责选择路径", "<span class=\"level mid\">中</span>权重文件和加载峰值降低", "<span class=\"level high\">强</span>取决于 kernel 和硬件指令", "<span class=\"level high\">强</span>权重占用和带宽压力下降"]]
+        ],
+        note: "独显估算把权重、KV cache、激活和 workspace 计入 GDDR 需求，把服务进程、请求队列和 CPU 侧缓冲计入 LPDDR 需求；实际结果会受 PCIe、GPU kernel、paged attention、batch 策略和驱动栈影响。",
+        rulesLead: "独显场景遇到延迟、OOM 或吞吐不足时，可以先按下面的症状定位。",
+        rules: [
+          ["GDDR 显存爆了", "先降模型规模或权重量化，再缩短上下文和并发；KV cache 通常是长上下文的核心变量。"],
+          ["首 token 很慢", "重点看 prompt 长度、prefill 吞吐、CPU 分词和排队；长文档场景可考虑缓存 prompt。"],
+          ["生成 token/s 低", "重点看 GPU 利用率、GDDR 带宽、量化 kernel、batch 策略和模型大小。"],
+          ["并发上不去", "重点看 CPU 调度、LPDDR 系统内存、GDDR 中 KV cache 总量和请求队列。"]
+        ],
+        compute: {
+          dedicatedVram: true,
+          cpuMultiplier: 0.9,
+          computeMultiplier: 1,
+          bandwidthMultiplier: 1,
+          referenceTops: 120,
+          referenceBandwidth: 1200,
+          cpuReferenceCores: 32,
+          modelBudgetLoad: 0.72,
+          ramLoad: 0.65,
+          ramIncludesModel: false,
+          bandwidthLabel: "GDDR 带宽"
+        }
+      }
+    };
+
+    const cnnArchitectures = {
+      "cpu-lpddr": {
+        name: "CPU + LPDDR 内存",
+        pageLead: "用 5W1H 拆解 CNN 判别推理：CPU 负责预处理、卷积/池化/分类计算，LPDDR 承载输入图像、权重、特征图和结果队列。",
+        flowTitle: "CPU + LPDDR 架构下 CNN 判别请求如何流动",
+        flowLead: "CNN 判别模型通常输入图像或特征块，经过卷积特征提取和分类头，输出类别、分数或异常判断。",
+        flowBadge: "CNN Forward + Classify",
+        legends: ["CPU：预处理、卷积、分类、I/O", "LPDDR：图像、权重、特征图、队列", "CPU 向量单元：卷积/GEMM/池化", "LPDDR 预算：权重与中间特征图"],
+        labels: { cpu: "CPU", ram: "LPDDR", accel: "CPU向量", vram: "LPDDR预算" },
+        phases: [
+          { title: "接收图像与任务", text: "CPU 接收图片、视频帧或传感器块，任务队列和元数据进入 LPDDR。", chips: [["cpu", "CPU"], ["ram", "LPDDR"]] },
+          { title: "预处理与归一化", text: "CPU 完成解码、resize、crop、normalize 和 batch 拼接，输入张量保存在 LPDDR。", chips: [["cpu", "CPU"], ["ram", "LPDDR"]] },
+          { title: "卷积特征提取", text: "CPU 向量单元执行卷积、BN/激活和池化，LPDDR 带宽影响特征图读写。", chips: [["accel", "CPU向量"], ["ram", "LPDDR"]] },
+          { title: "分类/判别头", text: "全连接、全局池化或小型检测头输出类别分数、阈值判断或异常概率。", chips: [["accel", "CPU向量"], ["cpu", "CPU"]] },
+          { title: "后处理与返回", text: "CPU 完成 top-k、阈值过滤、标签映射和业务回写，高吞吐会放大队列压力。", chips: [["cpu", "CPU"], ["ram", "LPDDR"]] }
+        ],
+        rails: [
+          { key: "cpu", label: "CPU", color: "cpu", values: [52, 72, 82, 68, 64] },
+          { key: "ram", label: "LPDDR", color: "ram", values: [38, 58, 78, 52, 42] },
+          { key: "accel", label: "CPU向量", color: "accel", values: [12, 36, 94, 78, 24] }
+        ],
+        estimatorLead: "输入 CNN 参数、图像尺寸和吞吐目标，反推 CPU 核心数、LPDDR 容量、CPU 向量算力与推理内存预算。",
+        controls: { vramCapLabel: "现有推理内存预算", ramCapLabel: "现有 LPDDR 总容量", kv8Label: "中间特征图使用 8-bit" },
+        metrics: { weight: "权重 LPDDR 占用", kv: "特征图/激活", total: "模型工作集", ram: "LPDDR 总占用" },
+        specs: { cpu: "CPU 建议", ram: "LPDDR 容量建议", accel: "CPU 计算能力建议", vram: "推理内存预算" },
+        pressures: { cpu: "CPU预处理", ram: "LPDDR容量", accel: "CPU卷积", vram: "LPDDR预算" },
+        fivewonehLead: "CNN 判别模型的关键是输入预处理、卷积特征图读写、batch 吞吐和最终分类/阈值判断。",
+        questions: [
+          ["推理是什么", "把图像或特征块送入 CNN，经过卷积层提取局部特征，再输出类别、分数或判别结果。"],
+          ["为什么依赖硬件", "卷积算子吃计算和内存带宽，输入分辨率决定特征图大小，batch 决定并行度和内存峰值。"],
+          ["谁在参与", "CPU 承担预处理、卷积计算和后处理，LPDDR 承载图片、权重、特征图和队列。"],
+          ["什么时候消耗最多", "预处理吃 CPU，卷积特征提取吃算力和 LPDDR 带宽，高分辨率会放大激活占用。"],
+          ["数据在哪里流动", "图片解码后进入 LPDDR，CPU 反复读取权重和特征图，最后把类别结果返回业务端。"],
+          ["如何优化", "降低输入尺寸，使用 INT8/通道剪枝，融合 Conv-BN-Activation，批量处理但控制特征图峰值。"]
+        ],
+        hardwareLead: "CPU-only CNN 推理适合轻量分类、质检和低并发边缘场景，瓶颈通常在预处理、卷积 kernel 和 LPDDR 带宽。",
+        hardware: [
+          ["CPU：预处理 + 计算面", "CPU 同时负责图片解码、resize、卷积、分类和后处理。", ["影响端到端延迟和吞吐", "向量指令与线程绑定很关键"]],
+          ["LPDDR：数据承接面", "LPDDR 保存输入图像、权重、特征图、队列和结果缓存。", ["输入分辨率越高，特征图越大", "带宽不足会拖慢卷积层"]],
+          ["CPU 向量单元：卷积面", "AVX、AMX、NEON 等指令决定卷积、GEMM 和池化的有效吞吐。", ["影响 images/s", "算子融合能减少内存往返"]],
+          ["LPDDR：容量边界", "没有独立显存，权重和中间特征图都占用 LPDDR 预算。", ["给系统和输入队列留余量", "batch 过大容易放大激活峰值"]]
+        ],
+        matrixLead: "CNN 判别模型中，输入尺寸和 batch 通常比上下文长度更关键。",
+        matrixHeads: ["CPU", "LPDDR", "CPU向量", "LPDDR预算"],
+        matrixRows: [
+          ["图像解码/预处理", ["<span class=\"level high\">强</span>解码、resize、normalize", "<span class=\"level mid\">中</span>输入缓冲和 batch", "<span class=\"level low\">弱</span>少量 SIMD 加速", "<span class=\"level mid\">中</span>输入张量占用"]],
+          ["卷积特征提取", ["<span class=\"level high\">强</span>直接执行卷积", "<span class=\"level high\">强</span>特征图反复读写", "<span class=\"level high\">强</span>GEMM/Conv kernel 关键", "<span class=\"level high\">强</span>激活峰值随分辨率增长"]],
+          ["分类/判别头", ["<span class=\"level mid\">中</span>池化、全连接和阈值", "<span class=\"level low\">弱</span>输出较小", "<span class=\"level mid\">中</span>小矩阵和归约", "<span class=\"level low\">弱</span>容量压力较低"]],
+          ["输入分辨率", ["<span class=\"level mid\">中</span>预处理成本增长", "<span class=\"level high\">强</span>特征图近似平方增长", "<span class=\"level high\">强</span>卷积 FLOPs 增长", "<span class=\"level high\">强</span>激活峰值增长"]],
+          ["batch/并发", ["<span class=\"level high\">强</span>队列与调度上升", "<span class=\"level high\">强</span>输入和激活叠加", "<span class=\"level high\">强</span>利用率提升但延迟上升", "<span class=\"level high\">强</span>峰值内存随 batch 增长"]],
+          ["量化与融合", ["<span class=\"level mid\">中</span>选择执行路径", "<span class=\"level mid\">中</span>权重和激活下降", "<span class=\"level high\">强</span>INT8 kernel 决定收益", "<span class=\"level high\">强</span>降低工作集和带宽"]]
+        ],
+        note: "CNN 估算把权重、输入 batch、特征图激活和 workspace 计入模型工作集；实际会受网络结构、卷积实现、算子融合、输入预处理和内存布局影响。",
+        rulesLead: "CNN 判别场景遇到慢或 OOM，优先检查输入尺寸、batch、预处理和卷积 kernel。",
+        rules: [["LPDDR 不够", "降低 batch 或输入分辨率，再考虑 INT8 激活和模型剪枝。"], ["首帧很慢", "重点看图片解码、resize、模型加载和首轮 kernel warmup。"], ["吞吐低", "重点看卷积 kernel、线程绑定、SIMD 指令、batch 大小和 LPDDR 带宽。"], ["延迟抖动", "重点看输入队列、CPU 争用、内存带宽争用和后处理阈值逻辑。"]],
+        compute: { dedicatedVram: false, cpuMultiplier: 1.45, computeMultiplier: 1.9, bandwidthMultiplier: 1.45, referenceTops: 28, referenceBandwidth: 180, cpuReferenceCores: 40, modelBudgetLoad: 0.72, ramLoad: 0.65, ramIncludesModel: true, bandwidthLabel: "LPDDR 带宽" }
+      },
+      "npu-unified": {
+        name: "CPU + 边缘 NPU 统一 LPDDR 内存",
+        pageLead: "用 5W1H 拆解 CNN 边缘判别：CPU 做预处理和后处理，NPU 加速卷积/池化/分类算子，LPDDR 共享权重、输入和特征图。",
+        flowTitle: "边缘 NPU + LPDDR 下 CNN 判别请求如何流动",
+        flowLead: "CNN 是边缘 NPU 最常见的强项，但仍要看算子覆盖、输入预处理、共享 LPDDR 带宽和激活峰值。",
+        flowBadge: "CNN + Edge NPU",
+        legends: ["CPU：预处理、提交、后处理", "LPDDR：CPU/NPU 共享图像和特征图", "边缘 NPU：INT8 卷积/池化/分类", "LPDDR 预算：权重与激活峰值"],
+        labels: { cpu: "CPU", ram: "LPDDR", accel: "边缘NPU", vram: "LPDDR预算" },
+        phases: [
+          { title: "接收图像与任务", text: "CPU 接收图片或视频帧，输入队列、元数据和 DMA 缓冲进入 LPDDR。", chips: [["cpu", "CPU"], ["ram", "LPDDR"]] },
+          { title: "预处理与张量打包", text: "CPU 完成 resize、normalize、layout 转换，并提交 NPU 可执行的输入张量。", chips: [["cpu", "CPU"], ["ram", "LPDDR"]] },
+          { title: "NPU 卷积特征提取", text: "NPU 执行 INT8/INT4 卷积、池化和激活，LPDDR 带宽影响特征图读写。", chips: [["accel", "边缘NPU"], ["ram", "LPDDR"]] },
+          { title: "分类/判别头", text: "NPU 或 CPU 完成分类头、置信度和阈值逻辑；不支持算子可能回退到 CPU。", chips: [["accel", "边缘NPU"], ["cpu", "CPU"]] },
+          { title: "后处理与返回", text: "CPU 做 top-k、标签映射、规则过滤和业务回调，NPU 等待下一批输入。", chips: [["cpu", "CPU"], ["accel", "边缘NPU"]] }
+        ],
+        rails: [{ key: "cpu", label: "CPU", color: "cpu", values: [52, 70, 38, 48, 68] }, { key: "ram", label: "LPDDR", color: "ram", values: [38, 58, 82, 58, 42] }, { key: "accel", label: "边缘NPU", color: "accel", values: [12, 42, 96, 82, 34] }],
+        estimatorLead: "输入 CNN 参数、图像尺寸和吞吐目标，反推 CPU、LPDDR、边缘 NPU 算力与 NPU 可用 LPDDR 预算。",
+        controls: { vramCapLabel: "NPU 可用 LPDDR 预算", ramCapLabel: "现有 LPDDR 总容量", kv8Label: "中间特征图使用 8-bit 共享给 NPU" },
+        metrics: { weight: "权重共享内存", kv: "特征图/激活", total: "NPU工作集", ram: "LPDDR总占用" },
+        specs: { cpu: "CPU 建议", ram: "LPDDR 容量建议", accel: "边缘 NPU 建议", vram: "NPU LPDDR预算" },
+        pressures: { cpu: "CPU预处理", ram: "LPDDR容量", accel: "NPU卷积", vram: "LPDDR预算" },
+        fivewonehLead: "CNN + NPU 的重点是 NPU 是否完整覆盖卷积网络，CPU 预处理是否喂得上，以及 LPDDR 是否能承受特征图读写。",
+        questions: [["推理是什么", "CPU 准备图像张量，NPU 执行 CNN 主干和分类头，输出类别或判别分数。"], ["为什么依赖硬件", "NPU TOPS 决定卷积吞吐，LPDDR 带宽决定特征图流动，CPU 决定预处理和回退成本。"], ["谁在参与", "CPU、边缘 NPU 和 LPDDR 共同工作；NPU 没有独立显存，权重和激活共享 LPDDR。"], ["什么时候消耗最多", "预处理阶段吃 CPU，卷积阶段吃 NPU 和 LPDDR，高分辨率和 batch 会放大激活峰值。"], ["数据在哪里流动", "图片进入 LPDDR，NPU 读取输入和权重并写回特征图，CPU 读取结果做业务后处理。"], ["如何优化", "使用 NPU 支持的 INT8 模型，减少 layout 转换，融合算子，限制输入尺寸和 batch 峰值。"]],
+        hardwareLead: "边缘 NPU 很适合 CNN 判别，但实际吞吐取决于算子覆盖、预处理流水线和共享 LPDDR。",
+        hardware: [["CPU：预处理与回退面", "CPU 负责图片解码、resize、layout 转换、NPU 提交和后处理。", ["影响端到端延迟", "算子回退会重新压高 CPU"]], ["LPDDR：共享数据面", "LPDDR 承载输入、权重、特征图、队列和 NPU DMA 缓冲。", ["容量决定 batch 和分辨率边界", "带宽争用会拖慢 NPU"]], ["边缘 NPU：卷积计算面", "NPU 擅长 INT8 卷积、池化和分类头，但要求模型结构和算子可编译。", ["影响 images/s 和能效", "不支持算子会触发回退"]], ["LPDDR预算：容量边界", "权重和激活峰值占用 NPU 可用 LPDDR 预算。", ["高分辨率会放大激活", "batch 过大容易超预算"]]],
+        matrixLead: "CNN + NPU 中，特征图激活和 layout 转换常常比权重本身更影响性能。",
+        matrixHeads: ["CPU", "LPDDR", "边缘NPU", "LPDDR预算"],
+        matrixRows: [["图像解码/预处理", ["<span class=\"level high\">强</span>解码、resize、layout", "<span class=\"level mid\">中</span>输入队列和 DMA 缓冲", "<span class=\"level low\">弱</span>等待提交", "<span class=\"level mid\">中</span>输入 batch 占用"]], ["卷积特征提取", ["<span class=\"level mid\">中</span>提交和回退", "<span class=\"level high\">强</span>特征图读写", "<span class=\"level high\">强</span>卷积/池化主算力", "<span class=\"level high\">强</span>激活峰值增长"]], ["分类/判别头", ["<span class=\"level mid\">中</span>阈值和标签映射", "<span class=\"level low\">弱</span>输出小", "<span class=\"level mid\">中</span>小矩阵/归约", "<span class=\"level low\">弱</span>容量压力低"]], ["输入分辨率", ["<span class=\"level mid\">中</span>预处理变重", "<span class=\"level high\">强</span>特征图平方增长", "<span class=\"level high\">强</span>卷积 FLOPs 增长", "<span class=\"level high\">强</span>预算压力增大"]], ["batch/并发", ["<span class=\"level high\">强</span>队列和提交压力", "<span class=\"level high\">强</span>输入与激活叠加", "<span class=\"level high\">强</span>利用率提升", "<span class=\"level high\">强</span>峰值预算增长"]], ["量化与算子支持", ["<span class=\"level mid\">中</span>选择执行路径", "<span class=\"level mid\">中</span>激活占用下降", "<span class=\"level high\">强</span>NPU 支持决定收益", "<span class=\"level high\">强</span>降低预算和带宽"]]],
+        note: "CNN + NPU 估算假设权重、输入 batch、特征图和 workspace 占用 LPDDR 预算；实际会受 NPU 编译器、算子覆盖、layout 转换和 DMA 开销影响。",
+        rulesLead: "CNN + NPU 场景遇到慢或 OOM，先看算子覆盖、输入尺寸、batch 和 LPDDR 带宽。",
+        rules: [["LPDDR 预算不够", "降低输入分辨率或 batch，开启 INT8 激活，并检查是否有多路视频帧堆积。"], ["首帧很慢", "重点看 NPU 图编译、模型加载、预处理和首批 DMA。"], ["吞吐低", "重点看 NPU 利用率、layout 转换、算子回退和 LPDDR 带宽。"], ["延迟抖动", "重点看 CPU 预处理队列、NPU 提交节奏和多任务共享内存。"]],
+        compute: { dedicatedVram: false, cpuMultiplier: 0.95, computeMultiplier: 0.8, bandwidthMultiplier: 1.1, referenceTops: 45, referenceBandwidth: 170, cpuReferenceCores: 24, modelBudgetLoad: 0.70, ramLoad: 0.64, ramIncludesModel: true, bandwidthLabel: "共享 LPDDR 带宽" }
+      },
+      "dgpu-gddr": {
+        name: "CPU + LPDDR 内存 + 独立 GPU（GDDR 显存）",
+        pageLead: "用 5W1H 拆解 CNN 独显判别：CPU 与 LPDDR 负责输入流水线，独立 GPU 执行卷积主干，GDDR 保存权重、特征图和 workspace。",
+        flowTitle: "独立 GPU + GDDR 下 CNN 判别请求如何流动",
+        flowLead: "CNN 判别通常是高吞吐批量推理：CPU 准备 batch，GPU 在 GDDR 中完成卷积特征提取和分类头。",
+        flowBadge: "CNN + dGPU",
+        legends: ["CPU：解码、预处理、调度、后处理", "LPDDR：输入队列、系统缓冲", "独立 GPU：卷积、池化、分类头", "GDDR 显存：权重、特征图、workspace"],
+        labels: { cpu: "CPU", ram: "LPDDR", accel: "独立GPU", vram: "GDDR" },
+        phases: [
+          { title: "接收图像与任务", text: "CPU 接收图像流和批处理任务，LPDDR 保存输入队列和元数据。", chips: [["cpu", "CPU"], ["ram", "LPDDR"]] },
+          { title: "预处理与上传", text: "CPU 完成解码、resize 和 normalize，再把 batch 张量提交到 GPU/GDDR。", chips: [["cpu", "CPU"], ["ram", "LPDDR"]] },
+          { title: "GPU 卷积特征提取", text: "GPU 在 GDDR 中执行卷积、激活、池化和融合算子，显存带宽决定特征图吞吐。", chips: [["accel", "独立GPU"], ["vram", "GDDR"]] },
+          { title: "分类/判别头", text: "GPU 完成分类头或检测头，输出 logits、类别分数或异常概率。", chips: [["accel", "独立GPU"], ["vram", "GDDR"]] },
+          { title: "后处理与返回", text: "CPU 取回结果并执行 top-k、阈值过滤和业务回调，GPU 继续处理下一批。", chips: [["cpu", "CPU"], ["ram", "LPDDR"]] }
+        ],
+        rails: [{ key: "cpu", label: "CPU", color: "cpu", values: [52, 72, 34, 32, 64] }, { key: "ram", label: "LPDDR", color: "ram", values: [38, 62, 30, 24, 38] }, { key: "accel", label: "独立GPU", color: "accel", values: [12, 42, 96, 86, 42] }, { key: "vram", label: "GDDR", color: "vram", values: [18, 48, 90, 82, 30] }],
+        estimatorLead: "输入 CNN 参数、图像尺寸和吞吐目标，反推 CPU、LPDDR、独立 GPU 等级与 GDDR 显存规格。",
+        controls: { vramCapLabel: "现有 GDDR 显存容量", ramCapLabel: "现有 LPDDR 系统内存", kv8Label: "中间特征图使用 8-bit 存在 GDDR" },
+        metrics: { weight: "权重 GDDR 占用", kv: "特征图/激活", total: "总 GDDR 需求", ram: "LPDDR 运行内存" },
+        specs: { cpu: "CPU 建议", ram: "LPDDR 内存建议", accel: "独立 GPU 建议", vram: "GDDR 显存建议" },
+        pressures: { cpu: "CPU预处理", ram: "LPDDR内存", accel: "GPU卷积", vram: "GDDR显存" },
+        fivewonehLead: "CNN + 独显的重点是 CPU 输入流水线能否喂满 GPU，以及 GDDR 是否容纳 batch 特征图峰值。",
+        questions: [["推理是什么", "CPU 准备图像 batch，GPU 执行 CNN 主干和分类头，输出类别、分数或判别结果。"], ["为什么依赖硬件", "GPU 算力和 GDDR 带宽决定卷积吞吐，GDDR 容量决定 batch 和分辨率峰值。"], ["谁在参与", "CPU、LPDDR、独立 GPU 和 GDDR 共同工作；CPU 负责输入流水线，GPU 负责主计算。"], ["什么时候消耗最多", "预处理和上传吃 CPU/LPDDR，卷积阶段吃 GPU/GDDR，高分辨率会放大激活峰值。"], ["数据在哪里流动", "图片在 LPDDR 中排队，batch 上传到 GDDR，GPU 完成 CNN forward 后结果回到 CPU。"], ["如何优化", "使用固定 batch、算子融合、Tensor Core/INT8、异步上传和预处理流水线。"]],
+        hardwareLead: "独显 CNN 推理适合高吞吐分类、质检和视频帧批处理，瓶颈经常在预处理流水线或 GDDR 激活峰值。",
+        hardware: [["CPU：输入流水线", "负责解码、resize、batch 拼接、任务调度和后处理。", ["CPU 过慢会喂不满 GPU", "异步预处理能降低等待"]], ["LPDDR：系统缓冲", "保存输入队列、解码帧、上传缓冲和结果缓存。", ["影响多路输入稳定性", "队列过大增加延迟"]], ["独立 GPU：卷积计算面", "执行卷积、池化、BN/激活融合和分类头。", ["影响 images/s", "Tensor Core/INT8 能显著提升吞吐"]], ["GDDR 显存：特征图容量", "承载权重、输入 batch、特征图和 workspace。", ["输入尺寸和 batch 决定峰值", "显存带宽影响卷积吞吐"]]],
+        matrixLead: "独显 CNN 中，GDDR 通常承载特征图峰值，LPDDR 主要承载输入流水线。",
+        matrixHeads: ["CPU", "LPDDR", "独立GPU", "GDDR显存"],
+        matrixRows: [["图像解码/预处理", ["<span class=\"level high\">强</span>解码、resize、normalize", "<span class=\"level high\">强</span>输入队列和上传缓冲", "<span class=\"level low\">弱</span>等待输入", "<span class=\"level mid\">中</span>输入 batch"]], ["卷积特征提取", ["<span class=\"level low\">弱</span>提交任务", "<span class=\"level low\">弱</span>系统侧压力小", "<span class=\"level high\">强</span>主计算", "<span class=\"level high\">强</span>特征图和 workspace"]], ["分类/判别头", ["<span class=\"level mid\">中</span>后处理", "<span class=\"level low\">弱</span>输出小", "<span class=\"level mid\">中</span>分类头计算", "<span class=\"level low\">弱</span>容量压力低"]], ["输入分辨率", ["<span class=\"level mid\">中</span>预处理变重", "<span class=\"level mid\">中</span>输入帧变大", "<span class=\"level high\">强</span>FLOPs 增长", "<span class=\"level high\">强</span>激活峰值增长"]], ["batch/并发", ["<span class=\"level mid\">中</span>调度和后处理增长", "<span class=\"level high\">强</span>输入队列增长", "<span class=\"level high\">强</span>利用率提升", "<span class=\"level high\">强</span>显存峰值增长"]], ["量化与融合", ["<span class=\"level low\">弱</span>主要选路径", "<span class=\"level low\">弱</span>输入侧变化小", "<span class=\"level high\">强</span>Tensor Core/INT8 收益", "<span class=\"level high\">强</span>降低带宽和 workspace"]]],
+        note: "独显 CNN 估算把权重、输入 batch、特征图和 workspace 计入 GDDR，把输入队列和预处理缓冲计入 LPDDR。",
+        rulesLead: "独显 CNN 场景遇到慢或 OOM，先看输入流水线、batch、分辨率和 GDDR 峰值。",
+        rules: [["GDDR 显存不够", "降低 batch 或输入分辨率，开启 INT8 激活，检查 workspace 是否过大。"], ["GPU 吃不满", "重点看 CPU 预处理、异步上传、batch 拼接和数据加载线程。"], ["吞吐低", "重点看 GPU 卷积 kernel、Tensor Core/INT8、GDDR 带宽和 batch 策略。"], ["延迟高", "减少队列深度，缩小 batch，避免 CPU 后处理串行化。"]],
+        compute: { dedicatedVram: true, cpuMultiplier: 0.75, computeMultiplier: 0.55, bandwidthMultiplier: 0.9, referenceTops: 120, referenceBandwidth: 900, cpuReferenceCores: 32, modelBudgetLoad: 0.75, ramLoad: 0.68, ramIncludesModel: false, bandwidthLabel: "GDDR 带宽" }
+      }
+    };
+
+    const transformerScenarios = {
+      starter: { params: 7, layers: 32, kvHeads: 32, headDim: 128, quant: 4, context: 4, concurrency: 1, targetTps: 20, vram: 16, ram: 32, kv8: false },
+      workstation: { params: 14, layers: 48, kvHeads: 8, headDim: 128, quant: 4, context: 16, concurrency: 2, targetTps: 18, vram: 24, ram: 64, kv8: false },
+      long: { params: 32, layers: 64, kvHeads: 8, headDim: 128, quant: 4, context: 64, concurrency: 2, targetTps: 12, vram: 80, ram: 128, kv8: true },
+      batch: { params: 14, layers: 48, kvHeads: 8, headDim: 128, quant: 8, context: 8, concurrency: 12, targetTps: 12, vram: 80, ram: 128, kv8: false }
+    };
+
+    const cnnScenarios = {
+      starter: { params: 12, layers: 18, kvHeads: 48, headDim: 3, quant: 8, context: 224, concurrency: 1, targetTps: 60, vram: 4, ram: 16, kv8: true },
+      workstation: { params: 45, layers: 50, kvHeads: 64, headDim: 3, quant: 8, context: 320, concurrency: 4, targetTps: 120, vram: 8, ram: 32, kv8: true },
+      long: { params: 90, layers: 80, kvHeads: 96, headDim: 3, quant: 8, context: 640, concurrency: 2, targetTps: 45, vram: 16, ram: 64, kv8: false },
+      batch: { params: 110, layers: 120, kvHeads: 128, headDim: 3, quant: 8, context: 384, concurrency: 16, targetTps: 260, vram: 24, ram: 96, kv8: true }
+    };
+
+    const modelTypes = {
+      transformer: {
+        name: "Transformer 生成模型",
+        pageTitle: "Transformer 生成模型与硬件架构资源依赖",
+        architectures: transformerArchitectures,
+        scenarios: transformerScenarios,
+        defaultScenario: "starter",
+        scenarioLabels: {
+          starter: "快速体验",
+          workstation: "工作站",
+          long: "长上下文",
+          batch: "高并发"
+        },
+        labels: {
+          modelParams: "参数量 B",
+          modelLayers: "层数",
+          kvHeads: "KV 头数",
+          headDim: "Head dim",
+          context: "上下文长度",
+          concurrency: "并发会话",
+          targetTps: "目标速度"
+        },
+        ranges: {
+          modelParams: { min: 1, max: 240, step: 0.1 },
+          modelLayers: { min: 1, max: 160, step: 1 },
+          kvHeads: { min: 1, max: 128, step: 1 },
+          headDim: { min: 32, max: 256, step: 8 },
+          contextTokens: { min: 4, max: 128, step: 4 },
+          concurrency: { min: 1, max: 16, step: 1 },
+          targetTps: { min: 4, max: 80, step: 2 },
+          vramCap: { min: 8, max: 192, step: 8 },
+          ramCap: { min: 16, max: 256, step: 16 }
+        },
+        budgetSteps: [8, 12, 16, 24, 32, 40, 48, 64, 80, 96, 128, 160, 192, 256, 320, 384, 512],
+        ramSteps: [16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024]
+      },
+      cnn: {
+        name: "CNN 判别模型",
+        pageTitle: "CNN 判别模型与硬件架构资源依赖",
+        architectures: cnnArchitectures,
+        scenarios: cnnScenarios,
+        defaultScenario: "starter",
+        scenarioLabels: {
+          starter: "轻量分类",
+          workstation: "边缘质检",
+          long: "高分辨率",
+          batch: "批量吞吐"
+        },
+        labels: {
+          modelParams: "参数量 M",
+          modelLayers: "卷积层/Block 数",
+          kvHeads: "基础通道",
+          headDim: "输入通道",
+          context: "输入分辨率",
+          concurrency: "batch/并发",
+          targetTps: "目标吞吐"
+        },
+        ranges: {
+          modelParams: { min: 1, max: 2000, step: 1 },
+          modelLayers: { min: 4, max: 300, step: 1 },
+          kvHeads: { min: 8, max: 1024, step: 8 },
+          headDim: { min: 1, max: 8, step: 1 },
+          contextTokens: { min: 128, max: 1024, step: 32 },
+          concurrency: { min: 1, max: 64, step: 1 },
+          targetTps: { min: 5, max: 1000, step: 5 },
+          vramCap: { min: 2, max: 128, step: 2 },
+          ramCap: { min: 8, max: 256, step: 8 }
+        },
+        budgetSteps: [1, 2, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128],
+        ramSteps: [8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384]
+      }
+    };
+
+    const refs = {
+      pageTitle: document.querySelector("#pageTitle"),
+      pageLead: document.querySelector("#pageLead"),
+      modelName: document.querySelector("#modelName"),
+      archName: document.querySelector("#archName"),
+      flowTitle: document.querySelector("#flowTitle"),
+      flowLead: document.querySelector("#flowLead"),
+      flowBadge: document.querySelector("#flowBadge"),
+      legendCpu: document.querySelector("#legendCpu"),
+      legendRam: document.querySelector("#legendRam"),
+      legendAccel: document.querySelector("#legendAccel"),
+      legendVram: document.querySelector("#legendVram"),
+      railLabels: document.querySelector("#railLabels"),
+      railBars: document.querySelector("#railBars"),
+      estimatorLead: document.querySelector("#estimatorLead"),
+      modelParamsLabel: document.querySelector("#modelParamsLabel"),
+      modelLayersLabel: document.querySelector("#modelLayersLabel"),
+      kvHeadsLabel: document.querySelector("#kvHeadsLabel"),
+      headDimLabel: document.querySelector("#headDimLabel"),
+      modelParams: document.querySelector("#modelParams"),
+      modelLayers: document.querySelector("#modelLayers"),
+      kvHeads: document.querySelector("#kvHeads"),
+      headDim: document.querySelector("#headDim"),
+      contextLabel: document.querySelector("#contextLabel"),
+      contextTokens: document.querySelector("#contextTokens"),
+      contextOut: document.querySelector("#contextOut"),
+      concurrencyLabel: document.querySelector("#concurrencyLabel"),
+      concurrency: document.querySelector("#concurrency"),
+      concurrencyOut: document.querySelector("#concurrencyOut"),
+      targetTpsLabel: document.querySelector("#targetTpsLabel"),
+      targetTps: document.querySelector("#targetTps"),
+      targetTpsOut: document.querySelector("#targetTpsOut"),
+      vramCap: document.querySelector("#vramCap"),
+      vramCapOut: document.querySelector("#vramCapOut"),
+      vramCapLabel: document.querySelector("#vramCapLabel"),
+      ramCap: document.querySelector("#ramCap"),
+      ramCapOut: document.querySelector("#ramCapOut"),
+      ramCapLabel: document.querySelector("#ramCapLabel"),
+      kv8: document.querySelector("#kv8"),
+      kv8LabelText: document.querySelector("#kv8LabelText"),
+      weightMetricLabel: document.querySelector("#weightMetricLabel"),
+      kvMetricLabel: document.querySelector("#kvMetricLabel"),
+      totalMetricLabel: document.querySelector("#totalMetricLabel"),
+      ramMetricLabel: document.querySelector("#ramMetricLabel"),
+      weightGb: document.querySelector("#weightGb"),
+      kvGb: document.querySelector("#kvGb"),
+      totalVramGb: document.querySelector("#totalVramGb"),
+      ramGb: document.querySelector("#ramGb"),
+      cpuSpecLabel: document.querySelector("#cpuSpecLabel"),
+      ramSpecLabel: document.querySelector("#ramSpecLabel"),
+      accelSpecLabel: document.querySelector("#accelSpecLabel"),
+      vramSpecLabel: document.querySelector("#vramSpecLabel"),
+      cpuSpec: document.querySelector("#cpuSpec"),
+      ramSpec: document.querySelector("#ramSpec"),
+      accelSpec: document.querySelector("#accelSpec"),
+      vramSpec: document.querySelector("#vramSpec"),
+      cpuSpecNote: document.querySelector("#cpuSpecNote"),
+      ramSpecNote: document.querySelector("#ramSpecNote"),
+      accelSpecNote: document.querySelector("#accelSpecNote"),
+      vramSpecNote: document.querySelector("#vramSpecNote"),
+      cpuBar: document.querySelector("#cpuBar"),
+      ramBar: document.querySelector("#ramBar"),
+      accelBar: document.querySelector("#accelBar"),
+      vramBar: document.querySelector("#vramBar"),
+      cpuPressureLabel: document.querySelector("#cpuPressureLabel"),
+      ramPressureLabel: document.querySelector("#ramPressureLabel"),
+      accelPressureLabel: document.querySelector("#accelPressureLabel"),
+      vramPressureLabel: document.querySelector("#vramPressureLabel"),
+      cpuPct: document.querySelector("#cpuPct"),
+      ramPct: document.querySelector("#ramPct"),
+      accelPct: document.querySelector("#accelPct"),
+      vramPct: document.querySelector("#vramPct"),
+      bottleneck: document.querySelector("#bottleneck"),
+      fivewonehLead: document.querySelector("#fivewonehLead"),
+      hardwareLead: document.querySelector("#hardwareLead"),
+      matrixLead: document.querySelector("#matrixLead"),
+      matrixHeadCpu: document.querySelector("#matrixHeadCpu"),
+      matrixHeadRam: document.querySelector("#matrixHeadRam"),
+      matrixHeadAccel: document.querySelector("#matrixHeadAccel"),
+      matrixHeadVram: document.querySelector("#matrixHeadVram"),
+      matrixBody: document.querySelector("#matrixBody"),
+      matrixNote: document.querySelector("#matrixNote"),
+      rulesLead: document.querySelector("#rulesLead"),
+      rulesGrid: document.querySelector("#rulesGrid")
+    };
+
+    let quantBits = 4;
+    const initialParams = new URLSearchParams(window.location.search);
+    const initialModelKey = initialParams.get("model");
+    const initialArchKey = initialParams.get("arch");
+    let currentModelKey = modelTypes[initialModelKey] ? initialModelKey : "transformer";
+    let currentArchKey = currentModel().architectures[initialArchKey] ? initialArchKey : "cpu-lpddr";
+    let activePhaseIndex = 0;
+    let phaseTimer = 0;
+    let phaseAutoPaused = false;
+
+    function fmt(value) {
+      if (value >= 100) return Math.round(value).toString();
+      if (value >= 10) return value.toFixed(1);
+      return value.toFixed(2);
+    }
+
+    function readNumber(element, fallback) {
+      const value = Number(element.value);
+      return Number.isFinite(value) && value > 0 ? value : fallback;
+    }
+
+    function roundEven(value) {
+      return Math.max(2, Math.ceil(value / 2) * 2);
+    }
+
+    function roundUpSpec(value, steps) {
+      return steps.find((step) => step >= value) || Math.ceil(value / 128) * 128;
+    }
+
+    function describeAccel(archKey, effectiveTops, bandwidthGbps, recommendedBudget) {
+      if (archKey === "cpu-lpddr") {
+        if (effectiveTops >= 130 || bandwidthGbps >= 600 || recommendedBudget >= 192) return "多路服务器 CPU";
+        if (effectiveTops >= 65 || bandwidthGbps >= 350 || recommendedBudget >= 96) return "高核心数工作站 CPU";
+        if (effectiveTops >= 24 || bandwidthGbps >= 180 || recommendedBudget >= 48) return "现代多核 CPU";
+        return "轻量 CPU 推理";
+      }
+      if (archKey === "npu-unified") {
+        if (effectiveTops >= 130 || bandwidthGbps >= 500 || recommendedBudget >= 160) return "多 NPU/高端边缘平台";
+        if (effectiveTops >= 60 || bandwidthGbps >= 260 || recommendedBudget >= 80) return "高端边缘 NPU";
+        if (effectiveTops >= 20 || bandwidthGbps >= 140 || recommendedBudget >= 32) return "主流边缘 NPU";
+        return "低功耗边缘 NPU";
+      }
+      if (recommendedBudget >= 160 || effectiveTops >= 180 || bandwidthGbps >= 1800) return "多卡/数据中心级";
+      if (recommendedBudget >= 80 || effectiveTops >= 90 || bandwidthGbps >= 900) return "高端工作站级";
+      if (recommendedBudget >= 32 || effectiveTops >= 35 || bandwidthGbps >= 400) return "中高端独显";
+      return "入门独显推理";
+    }
+
+    function clampPct(value) {
+      return Math.max(4, Math.min(100, Math.round(value)));
+    }
+
+    function pressureText(percent) {
+      if (percent >= 110) return "超载";
+      if (percent >= 85) return "偏高";
+      if (percent >= 55) return "中等";
+      return "较低";
+    }
+
+    function setBar(bar, text, percent) {
+      const clamped = clampPct(percent);
+      bar.style.setProperty("--value", `${clamped}%`);
+      text.textContent = `${Math.round(percent)}%`;
+    }
+
+    function chipHtml(chips) {
+      return chips.map(([kind, text]) => `<span class="chip ${kind}">${text}</span>`).join("");
+    }
+
+    function dotLegend(color, text) {
+      return `<span class="dot" style="--dot-color: var(--${color})"></span>${text}`;
+    }
+
+    function listHtml(items) {
+      return items.map((item) => `<li>${item}</li>`).join("");
+    }
+
+    function currentModel() {
+      return modelTypes[currentModelKey];
+    }
+
+    function currentArchitectures() {
+      return currentModel().architectures;
+    }
+
+    function currentScenarios() {
+      return currentModel().scenarios;
+    }
+
+    function setRange(element, range) {
+      element.min = range.min;
+      element.max = range.max;
+      element.step = range.step;
+      const value = Number(element.value);
+      if (!Number.isFinite(value) || value < range.min) {
+        element.value = range.min;
+      } else if (value > range.max) {
+        element.value = range.max;
+      }
+    }
+
+    function applyModelControls(model) {
+      refs.modelName.textContent = model.name;
+      refs.modelParamsLabel.textContent = model.labels.modelParams;
+      refs.modelLayersLabel.textContent = model.labels.modelLayers;
+      refs.kvHeadsLabel.textContent = model.labels.kvHeads;
+      refs.headDimLabel.textContent = model.labels.headDim;
+      refs.contextLabel.textContent = model.labels.context;
+      refs.concurrencyLabel.textContent = model.labels.concurrency;
+      refs.targetTpsLabel.textContent = model.labels.targetTps;
+
+      setRange(refs.modelParams, model.ranges.modelParams);
+      setRange(refs.modelLayers, model.ranges.modelLayers);
+      setRange(refs.kvHeads, model.ranges.kvHeads);
+      setRange(refs.headDim, model.ranges.headDim);
+      setRange(refs.contextTokens, model.ranges.contextTokens);
+      setRange(refs.concurrency, model.ranges.concurrency);
+      setRange(refs.targetTps, model.ranges.targetTps);
+      setRange(refs.vramCap, model.ranges.vramCap);
+      setRange(refs.ramCap, model.ranges.ramCap);
+
+      document.querySelectorAll("[data-model]").forEach((button) => {
+        button.classList.toggle("is-active", button.dataset.model === currentModelKey);
+      });
+      document.querySelectorAll("[data-scenario]").forEach((button) => {
+        button.textContent = model.scenarioLabels[button.dataset.scenario] || button.textContent;
+      });
+    }
+
+    function renderArchitecture() {
+      const model = currentModel();
+      const arch = currentArchitectures()[currentArchKey];
+      applyModelControls(model);
+      refs.pageTitle.textContent = model.pageTitle;
+      refs.pageLead.textContent = arch.pageLead;
+      refs.archName.textContent = arch.name;
+      refs.flowTitle.textContent = arch.flowTitle;
+      refs.flowLead.textContent = arch.flowLead;
+      refs.flowBadge.textContent = arch.flowBadge;
+      refs.legendCpu.innerHTML = dotLegend("cpu", arch.legends[0]);
+      refs.legendRam.innerHTML = dotLegend("ram", arch.legends[1]);
+      refs.legendAccel.innerHTML = dotLegend("accel", arch.legends[2]);
+      refs.legendVram.innerHTML = dotLegend("vram", arch.legends[3]);
+
+      arch.phases.forEach((phase, index) => {
+        const step = index + 1;
+        $(`phaseTitle${step}`).textContent = phase.title;
+        $(`phaseText${step}`).textContent = phase.text;
+        $(`phaseChips${step}`).innerHTML = chipHtml(phase.chips);
+      });
+
+      refs.railLabels.innerHTML = arch.rails.map((rail) => `<div>${rail.label}</div>`).join("");
+      refs.railBars.innerHTML = arch.rails.map((rail) => `
+              <div class="rail-track ${rail.key}" style="--rail: var(--${rail.color}); --value: ${rail.values[activePhaseIndex]}%"><span></span></div>`).join("");
+      refs.estimatorLead.textContent = arch.estimatorLead;
+      refs.vramCapLabel.textContent = arch.controls.vramCapLabel;
+      refs.ramCapLabel.textContent = arch.controls.ramCapLabel;
+      refs.kv8LabelText.textContent = arch.controls.kv8Label;
+      refs.weightMetricLabel.textContent = arch.metrics.weight;
+      refs.kvMetricLabel.textContent = arch.metrics.kv;
+      refs.totalMetricLabel.textContent = arch.metrics.total;
+      refs.ramMetricLabel.textContent = arch.metrics.ram;
+      refs.cpuSpecLabel.textContent = arch.specs.cpu;
+      refs.ramSpecLabel.textContent = arch.specs.ram;
+      refs.accelSpecLabel.textContent = arch.specs.accel;
+      refs.vramSpecLabel.textContent = arch.specs.vram;
+      refs.cpuPressureLabel.textContent = arch.pressures.cpu;
+      refs.ramPressureLabel.textContent = arch.pressures.ram;
+      refs.accelPressureLabel.textContent = arch.pressures.accel;
+      refs.vramPressureLabel.textContent = arch.pressures.vram;
+
+      refs.fivewonehLead.textContent = arch.fivewonehLead;
+      arch.questions.forEach(([title, text], index) => {
+        const item = index + 1;
+        $(`questionTitle${item}`).textContent = title;
+        $(`questionText${item}`).textContent = text;
+      });
+
+      refs.hardwareLead.textContent = arch.hardwareLead;
+      arch.hardware.forEach(([title, text, items], index) => {
+        const item = index + 1;
+        $(`hardwareTitle${item}`).textContent = title;
+        $(`hardwareText${item}`).textContent = text;
+        $(`hardwareList${item}`).innerHTML = listHtml(items);
+      });
+
+      refs.matrixLead.textContent = arch.matrixLead;
+      refs.matrixHeadCpu.textContent = arch.matrixHeads[0];
+      refs.matrixHeadRam.textContent = arch.matrixHeads[1];
+      refs.matrixHeadAccel.textContent = arch.matrixHeads[2];
+      refs.matrixHeadVram.textContent = arch.matrixHeads[3];
+      refs.matrixBody.innerHTML = arch.matrixRows.map(([topic, cells]) => `
+            <tr>
+              <td>${topic}</td>
+              <td>${cells[0]}</td>
+              <td>${cells[1]}</td>
+              <td>${cells[2]}</td>
+              <td>${cells[3]}</td>
+            </tr>`).join("");
+      refs.matrixNote.textContent = arch.note;
+      refs.rulesLead.textContent = arch.rulesLead;
+      refs.rulesGrid.innerHTML = arch.rules.map(([title, text]) => `
+        <article class="rule">
+          <strong>${title}</strong>
+          <p>${text}</p>
+        </article>`).join("");
+
+      document.querySelectorAll("[data-arch]").forEach((button) => {
+        button.classList.toggle("is-active", button.dataset.arch === currentArchKey);
+      });
+      setActivePhase(activePhaseIndex);
+      update();
+    }
+
+    function setActivePhase(index, manual = false) {
+      const arch = currentArchitectures()[currentArchKey];
+      activePhaseIndex = (index + arch.phases.length) % arch.phases.length;
+      document.querySelectorAll(".phase").forEach((phase) => {
+        const isActive = Number(phase.dataset.phase) === activePhaseIndex;
+        phase.classList.toggle("is-active", isActive);
+        phase.setAttribute("aria-pressed", String(isActive));
+      });
+      arch.rails.forEach((rail) => {
+        const track = refs.railBars.querySelector(`.rail-track.${rail.key}`);
+        if (track) {
+          track.style.setProperty("--value", `${rail.values[activePhaseIndex]}%`);
+        }
+      });
+      if (manual) {
+        stopPhaseRotation();
+      }
+    }
+
+    function stopPhaseRotation() {
+      phaseAutoPaused = true;
+      if (phaseTimer) {
+        window.clearInterval(phaseTimer);
+        phaseTimer = 0;
+      }
+    }
+
+    function startPhaseRotation() {
+      phaseAutoPaused = false;
+      if (phaseTimer) {
+        window.clearInterval(phaseTimer);
+      }
+      phaseTimer = window.setInterval(() => {
+        if (!phaseAutoPaused) {
+          setActivePhase(activePhaseIndex + 1);
+        }
+      }, 1800);
+    }
+
+    function activeQuant(bits, shouldUpdate = true) {
+      quantBits = bits;
+      document.querySelectorAll("[data-quant]").forEach((button) => {
+        button.classList.toggle("is-active", Number(button.dataset.quant) === bits);
+      });
+      if (shouldUpdate) {
+        update();
+      }
+    }
+
+    function applyScenario(name, shouldUpdate = true) {
+      const scenario = currentScenarios()[name];
+      if (!scenario) {
+        return;
+      }
+      refs.modelParams.value = scenario.params;
+      refs.modelLayers.value = scenario.layers;
+      refs.kvHeads.value = scenario.kvHeads;
+      refs.headDim.value = scenario.headDim;
+      refs.contextTokens.value = scenario.context;
+      refs.concurrency.value = scenario.concurrency;
+      refs.targetTps.value = scenario.targetTps;
+      refs.vramCap.value = scenario.vram;
+      refs.ramCap.value = scenario.ram;
+      refs.kv8.checked = scenario.kv8;
+      activeQuant(scenario.quant, false);
+      document.querySelectorAll("[data-scenario]").forEach((button) => {
+        button.classList.toggle("is-active", button.dataset.scenario === name);
+      });
+      if (shouldUpdate) {
+        update();
+      }
+    }
+
+    function update() {
+      const model = currentModel();
+      const arch = currentArchitectures()[currentArchKey];
+      const compute = arch.compute;
+      const vramCap = Number(refs.vramCap.value);
+      const ramCap = Number(refs.ramCap.value);
+
+      let weightGb;
+      let kvGb;
+      let modelWorkGb;
+      let ramNeeded;
+      let recommendedModelBudget;
+      let recommendedRam;
+      let cpuCores;
+      let effectiveTops;
+      let bandwidthGbps;
+      let cpuNote;
+      let ramNote;
+      let accelNote;
+      let vramNote;
+      let candidateDetails;
+
+      if (currentModelKey === "cnn") {
+        const paramsM = readNumber(refs.modelParams, 25);
+        const blocks = readNumber(refs.modelLayers, 32);
+        const baseChannels = readNumber(refs.kvHeads, 64);
+        const inputChannels = readNumber(refs.headDim, 3);
+        const resolution = Number(refs.contextTokens.value);
+        const batch = Number(refs.concurrency.value);
+        const targetIps = Number(refs.targetTps.value);
+        const bytesPerParam = quantBits / 8;
+        const activationBytes = refs.kv8.checked ? 1 : 2;
+        const inputGb = resolution ** 2 * inputChannels * batch * activationBytes / (1024 ** 3);
+        const featureScale = Math.min(0.55, Math.max(0.16, 0.22 + Math.log2(Math.max(1, blocks / 24)) * 0.04 + Math.log2(Math.max(1, baseChannels / 64)) * 0.05));
+        const featureGb = blocks * resolution ** 2 * baseChannels * batch * activationBytes * featureScale / (1024 ** 3);
+        const workspaceGb = Math.max(0.25, featureGb * (compute.dedicatedVram ? 0.75 : 0.5), paramsM * bytesPerParam * 0.0008);
+        const inputQueueGb = Math.max(0.2, resolution ** 2 * inputChannels * Math.max(batch, 4) * 8 / (1024 ** 3));
+        const resolutionFactor = (resolution / 224) ** 2;
+        const channelFactor = Math.sqrt(baseChannels / 64);
+        const batchFactor = 1 + Math.log2(batch + 1) * 0.06;
+        const quantComputeFactor = quantBits === 16 ? 1.4 : quantBits === 8 ? 1 : 0.78;
+
+        weightGb = paramsM * 1000000 * bytesPerParam * 1.12 / (1024 ** 3);
+        kvGb = Math.max(0.12, inputGb + featureGb);
+        modelWorkGb = weightGb + kvGb + workspaceGb;
+        recommendedModelBudget = roundUpSpec(modelWorkGb / compute.modelBudgetLoad, model.budgetSteps);
+        ramNeeded = compute.ramIncludesModel
+          ? Math.max(6, modelWorkGb + inputQueueGb + 3 + batch * 0.18 + targetIps / 180)
+          : Math.max(6, inputQueueGb * 2.2 + weightGb * 0.25 + 4 + batch * 0.18 + targetIps / 220);
+        recommendedRam = roundUpSpec(ramNeeded / compute.ramLoad, model.ramSteps);
+        cpuCores = roundEven((3 + Math.sqrt(batch) * 1.7 + targetIps / 90 + resolution / 420 + Math.min(8, paramsM / 160)) * compute.cpuMultiplier);
+        effectiveTops = Math.max(1, paramsM * targetIps * resolutionFactor * channelFactor * batchFactor * quantComputeFactor * compute.computeMultiplier / 1000);
+        bandwidthGbps = Math.max(20, (weightGb + kvGb * 2.2 + inputGb) * targetIps * compute.bandwidthMultiplier / Math.max(1, Math.sqrt(batch)));
+
+        refs.contextOut.textContent = `${resolution}px`;
+        refs.concurrencyOut.textContent = batch.toString();
+        refs.targetTpsOut.textContent = `${targetIps} img/s`;
+        cpuNote = `按 batch ${batch}、${resolution}px 输入预留预处理和后处理余量。`;
+        ramNote = `估算占用 ${fmt(ramNeeded)} GB，按约 ${Math.round(compute.ramLoad * 100)}% 稳态负载取整。`;
+        accelNote = `约需 ${fmt(effectiveTops)} 有效 TOPS，${compute.bandwidthLabel}建议 >= ${Math.round(bandwidthGbps)} GB/s。`;
+        vramNote = `权重、特征图和 workspace 合计 ${fmt(modelWorkGb)} GB，按约 ${Math.round(compute.modelBudgetLoad * 100)}% 稳态负载取整。`;
+        candidateDetails = {
+          cpu: currentArchKey === "cpu-lpddr"
+            ? "CPU 同时承担预处理、卷积和后处理，线程绑定、SIMD kernel 和内存带宽会影响端到端响应。"
+            : "图像解码、resize、batch 拼接和后处理会影响端到端响应。",
+          ram: `${arch.labels.ram} 承接输入队列、特征图和系统侧缓冲，接近上限时稳定性会下降。`,
+          accel: `${arch.labels.accel} 的卷积/池化算子覆盖、有效算力和带宽决定主要 img/s。`,
+          vram: `${arch.labels.vram} 中的权重、特征图和 workspace 接近预算时，优先降输入分辨率、batch 或激活精度。`
+        };
+      } else {
+        const paramsB = readNumber(refs.modelParams, 7);
+        const layers = readNumber(refs.modelLayers, 32);
+        const kvHeads = readNumber(refs.kvHeads, 32);
+        const headDim = readNumber(refs.headDim, 128);
+        const contextK = Number(refs.contextTokens.value);
+        const concurrency = Number(refs.concurrency.value);
+        const targetTps = Number(refs.targetTps.value);
+        const bytesPerParam = quantBits / 8;
+        const kvBytes = refs.kv8.checked ? 1 : 2;
+        const activationGb = Math.max(1.2, paramsB * 0.04) + concurrency * 0.28 + contextK * 0.01;
+        const quantComputeFactor = quantBits === 16 ? 1.55 : quantBits === 8 ? 1.15 : 1;
+
+        weightGb = paramsB * bytesPerParam * 1.12;
+        kvGb = layers * contextK * 1024 * concurrency * 2 * kvHeads * headDim * kvBytes / (1024 ** 3);
+        modelWorkGb = weightGb + kvGb + activationGb;
+        recommendedModelBudget = roundUpSpec(modelWorkGb / compute.modelBudgetLoad, model.budgetSteps);
+        ramNeeded = compute.ramIncludesModel
+          ? Math.max(12, modelWorkGb + paramsB * 0.12 + 6 + concurrency * 1.2 + contextK * 0.05)
+          : Math.max(10, weightGb * 0.32 + kvGb * 0.06 + paramsB * 0.14 + 6 + concurrency * 1.2 + contextK * 0.05);
+        recommendedRam = roundUpSpec(ramNeeded / compute.ramLoad, model.ramSteps);
+        cpuCores = roundEven((4 + concurrency * 1.8 + Math.min(12, contextK / 8) + Math.min(12, paramsB / 12)) * compute.cpuMultiplier);
+        effectiveTops = Math.max(8, paramsB * targetTps * Math.sqrt(concurrency) * quantComputeFactor * 0.08 * compute.computeMultiplier);
+        bandwidthGbps = Math.max(80, weightGb * targetTps * (1 + Math.log2(concurrency + 1) * 0.35) * compute.bandwidthMultiplier);
+
+        refs.contextOut.textContent = `${contextK}K`;
+        refs.concurrencyOut.textContent = concurrency.toString();
+        refs.targetTpsOut.textContent = `${targetTps} token/s/会话`;
+        cpuNote = `按并发 ${concurrency}、${contextK}K 上下文预留调度余量。`;
+        ramNote = `估算占用 ${fmt(ramNeeded)} GB，按约 ${Math.round(compute.ramLoad * 100)}% 稳态负载取整。`;
+        accelNote = `约需 ${fmt(effectiveTops)} 有效 TOPS，${compute.bandwidthLabel}建议 >= ${Math.round(bandwidthGbps)} GB/s。`;
+        vramNote = `模型工作集 ${fmt(modelWorkGb)} GB，按约 ${Math.round(compute.modelBudgetLoad * 100)}% 稳态负载取整。`;
+        candidateDetails = {
+          cpu: currentArchKey === "cpu-lpddr"
+            ? "CPU 同时承担调度和矩阵计算，核心数、缓存和线程绑定会影响端到端响应。"
+            : "请求排队、分词、采样和流式输出会影响端到端响应。",
+          ram: `${arch.labels.ram} 承接请求队列、会话状态和系统侧缓冲，接近上限时稳定性会下降。`,
+          accel: `${arch.labels.accel} 的有效算力、算子支持和内存带宽决定主要 token/s。`,
+          vram: `${arch.labels.vram} 中的权重、KV cache、激活和 workspace 接近预算时，优先降模型、上下文或并发。`
+        };
+      }
+
+      const accelTier = describeAccel(currentArchKey, effectiveTops, bandwidthGbps, recommendedModelBudget);
+      const cpuPressure = cpuCores / compute.cpuReferenceCores * 100;
+      const ramPressure = ramNeeded / ramCap * 100;
+      const accelPressure = Math.max(effectiveTops / compute.referenceTops * 100, bandwidthGbps / compute.referenceBandwidth * 100);
+      const vramPressure = modelWorkGb / vramCap * 100;
+
+      refs.vramCapOut.textContent = `${vramCap} GB`;
+      refs.ramCapOut.textContent = `${ramCap} GB`;
+      refs.weightGb.textContent = `${fmt(weightGb)} GB`;
+      refs.kvGb.textContent = `${fmt(kvGb)} GB`;
+      refs.totalVramGb.textContent = `${fmt(modelWorkGb)} GB`;
+      refs.ramGb.textContent = `${fmt(ramNeeded)} GB`;
+      refs.cpuSpec.textContent = `${cpuCores} 核`;
+      refs.ramSpec.textContent = `${recommendedRam} GB`;
+      refs.accelSpec.textContent = accelTier;
+      refs.vramSpec.textContent = `${recommendedModelBudget} GB`;
+      refs.cpuSpecNote.textContent = cpuNote;
+      refs.ramSpecNote.textContent = ramNote;
+      refs.accelSpecNote.textContent = accelNote;
+      refs.vramSpecNote.textContent = vramNote;
+
+      setBar(refs.cpuBar, refs.cpuPct, cpuPressure);
+      setBar(refs.ramBar, refs.ramPct, ramPressure);
+      setBar(refs.accelBar, refs.accelPct, accelPressure);
+      setBar(refs.vramBar, refs.vramPct, vramPressure);
+
+      const candidates = [
+        { name: arch.pressures.cpu, value: cpuPressure, detail: candidateDetails.cpu },
+        { name: arch.pressures.ram, value: ramPressure, detail: candidateDetails.ram },
+        { name: arch.pressures.accel, value: accelPressure, detail: candidateDetails.accel },
+        { name: arch.pressures.vram, value: vramPressure, detail: candidateDetails.vram }
+      ].sort((a, b) => b.value - a.value)[0];
+
+      const state = pressureText(candidates.value);
+      let detail = candidates.detail;
+      if (candidates.value < 55) {
+        detail = currentModelKey === "cnn"
+          ? "当前配置余量充足；继续增加输入分辨率、batch 或模型规模时，再观察压力条的变化。"
+          : "当前配置余量充足；继续增加上下文、并发或模型规模时，再观察压力条的变化。";
+      } else if (candidates.value >= 100) {
+        detail = `${candidates.detail} 当前估算已超过安全边界，建议先降低对应压力项。`;
+      }
+      refs.bottleneck.innerHTML = `<strong>瓶颈预测：${candidates.name} ${state}</strong>${detail}`;
+      refs.bottleneck.style.borderLeftColor = candidates.value >= 100 ? "var(--risk)" : candidates.value >= 85 ? "var(--warn)" : "var(--ok)";
+      refs.bottleneck.style.background = candidates.value >= 100 ? "#fff4f2" : candidates.value >= 85 ? "#fffaf0" : "#f2faf6";
+    }
+
+    document.querySelectorAll("[data-quant]").forEach((button) => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll("[data-scenario]").forEach((scenarioButton) => scenarioButton.classList.remove("is-active"));
+        activeQuant(Number(button.dataset.quant));
+      });
+    });
+
+    document.querySelectorAll("[data-scenario]").forEach((button) => {
+      button.addEventListener("click", () => applyScenario(button.dataset.scenario));
+    });
+
+    document.querySelectorAll("[data-model]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const nextModelKey = button.dataset.model;
+        if (!modelTypes[nextModelKey] || nextModelKey === currentModelKey) {
+          return;
+        }
+        currentModelKey = nextModelKey;
+        if (!currentArchitectures()[currentArchKey]) {
+          currentArchKey = "cpu-lpddr";
+        }
+        activePhaseIndex = 0;
+        applyModelControls(currentModel());
+        applyScenario(currentModel().defaultScenario, false);
+        const url = new URL(window.location.href);
+        url.searchParams.set("model", currentModelKey);
+        url.searchParams.set("arch", currentArchKey);
+        window.history.replaceState(null, "", url);
+        renderArchitecture();
+        startPhaseRotation();
+      });
+    });
+
+    document.querySelectorAll("[data-arch]").forEach((button) => {
+      button.addEventListener("click", () => {
+        currentArchKey = button.dataset.arch;
+        activePhaseIndex = 0;
+        const url = new URL(window.location.href);
+        url.searchParams.set("arch", currentArchKey);
+        window.history.replaceState(null, "", url);
+        renderArchitecture();
+        startPhaseRotation();
+      });
+    });
+
+    document.querySelectorAll(".phase").forEach((phase) => {
+      phase.addEventListener("click", () => setActivePhase(Number(phase.dataset.phase), true));
+      phase.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          setActivePhase(Number(phase.dataset.phase), true);
+        }
+      });
+    });
+
+    [refs.modelParams, refs.modelLayers, refs.kvHeads, refs.headDim, refs.contextTokens, refs.concurrency, refs.targetTps, refs.vramCap, refs.ramCap, refs.kv8].forEach((element) => {
+      element.addEventListener("input", () => {
+        document.querySelectorAll("[data-scenario]").forEach((button) => button.classList.remove("is-active"));
+        update();
+      });
+    });
+
+    applyModelControls(currentModel());
+    applyScenario(currentModel().defaultScenario, false);
+    renderArchitecture();
+    startPhaseRotation();
+  </script>
+</body>
+</html>
