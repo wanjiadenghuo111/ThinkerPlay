@@ -480,6 +480,152 @@
       transition: width 320ms ease;
     }
 
+    .viz3d {
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 1px solid var(--line);
+      min-width: 0;
+    }
+
+    .viz3d-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 12px;
+    }
+
+    .viz3d-head h2 {
+      margin: 0;
+      font-size: 1.08rem;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    .viz3d-head p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 0.92rem;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .viz3d-controls {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(78px, 1fr));
+      gap: 6px;
+      flex: 0 0 min(270px, 42%);
+    }
+
+    .viz3d-controls button {
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+      color: var(--muted);
+      font-size: 0.84rem;
+      font-weight: 760;
+      line-height: 1.15;
+      padding: 6px 8px;
+    }
+
+    .viz3d-controls button.is-active {
+      color: #fff;
+      border-color: var(--ram);
+      background: var(--ram);
+    }
+
+    .viz3d-stage {
+      position: relative;
+      width: 100%;
+      height: clamp(360px, 42vw, 520px);
+      overflow: hidden;
+      border-radius: var(--radius);
+      background:
+        linear-gradient(90deg, rgba(19, 32, 30, 0.055) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(19, 32, 30, 0.055) 1px, transparent 1px),
+        linear-gradient(180deg, #fbfdfc 0%, #eef5f2 100%);
+      background-size: 24px 24px, 24px 24px, 100% 100%;
+      isolation: isolate;
+    }
+
+    .viz3d-stage canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .viz3d-loading {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 0.92rem;
+      font-weight: 720;
+      text-align: center;
+      padding: 18px;
+      pointer-events: none;
+    }
+
+    .viz3d-fallback {
+      display: grid;
+      height: 100%;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      align-items: center;
+      padding: 22px;
+      perspective: 900px;
+    }
+
+    .viz3d-fallback span {
+      display: grid;
+      min-height: 90px;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-left: 6px solid var(--node-color);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.84);
+      color: var(--ink);
+      font-weight: 800;
+      text-align: center;
+      transform: rotateX(56deg) rotateZ(-28deg);
+      box-shadow: 16px 18px 28px rgba(31, 49, 44, 0.08);
+    }
+
+    .viz3d-story {
+      display: grid;
+      grid-template-columns: 1.05fr 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .viz3d-story article {
+      border: 1px solid var(--line);
+      border-left: 5px solid var(--story-color, var(--ram));
+      border-radius: var(--radius);
+      background: #fff;
+      padding: 12px;
+      min-width: 0;
+    }
+
+    .viz3d-story strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.9rem;
+      line-height: 1.25;
+    }
+
+    .viz3d-story p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 0.86rem;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
     .simulator {
       padding: 18px;
     }
@@ -1018,6 +1164,20 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
+      .viz3d-head,
+      .viz3d-story {
+        grid-template-columns: 1fr;
+      }
+
+      .viz3d-head {
+        display: grid;
+      }
+
+      .viz3d-controls {
+        width: 100%;
+        flex-basis: auto;
+      }
+
       .flow-grid {
         grid-template-columns: 1fr;
       }
@@ -1127,8 +1287,14 @@
       .input-grid,
       .metrics,
       .spec-grid,
-      .segmented {
+      .segmented,
+      .viz3d-controls,
+      .viz3d-fallback {
         grid-template-columns: 1fr;
+      }
+
+      .viz3d-stage {
+        height: 360px;
       }
 
       .rail-map {
@@ -1244,6 +1410,40 @@
             <div class="rails" id="railBars">
             </div>
           </div>
+
+          <section class="viz3d" aria-labelledby="viz3d-title">
+            <div class="viz3d-head">
+              <div>
+                <h2 id="viz3d-title">推理过程 3D 可视化</h2>
+                <p id="viz3dLead">同一套硬件舞台会随模型和架构切换，展示数据、权重、特征图或 KV cache 如何流动。</p>
+              </div>
+              <div class="viz3d-controls" aria-label="3D 可视化控制">
+                <button class="is-active" type="button" data-viz-view="model">模型视角</button>
+                <button type="button" data-viz-view="hardware">硬件视角</button>
+                <button type="button" data-viz-action="step">单步</button>
+                <button type="button" data-viz-action="toggle">暂停</button>
+              </div>
+            </div>
+
+            <div class="viz3d-stage" id="viz3dStage" aria-label="推理过程 3D 舞台">
+              <div class="viz3d-loading" id="viz3dLoading">正在加载 3D 舞台</div>
+            </div>
+
+            <div class="viz3d-story" aria-label="当前阶段解释">
+              <article style="--story-color: var(--accel)">
+                <strong id="viz3dPhaseTitle">当前阶段</strong>
+                <p id="viz3dPhaseText">选择上方阶段卡片后，这里会解释模型内部正在发生什么。</p>
+              </article>
+              <article style="--story-color: var(--ram)">
+                <strong>硬件关系</strong>
+                <p id="viz3dHardwareText">CPU、内存、加速器和预算边界会根据硬件方案同步变化。</p>
+              </article>
+              <article style="--story-color: var(--vram)">
+                <strong>初学者抓手</strong>
+                <p id="viz3dResultText">CNN 看特征如何变成分类；Transformer 看已有 token 如何推出下一个 token。</p>
+              </article>
+            </div>
+          </section>
         </div>
       </div>
 
@@ -2076,6 +2276,13 @@
       flowTitle: document.querySelector("#flowTitle"),
       flowLead: document.querySelector("#flowLead"),
       flowBadge: document.querySelector("#flowBadge"),
+      viz3dLead: document.querySelector("#viz3dLead"),
+      viz3dStage: document.querySelector("#viz3dStage"),
+      viz3dLoading: document.querySelector("#viz3dLoading"),
+      viz3dPhaseTitle: document.querySelector("#viz3dPhaseTitle"),
+      viz3dPhaseText: document.querySelector("#viz3dPhaseText"),
+      viz3dHardwareText: document.querySelector("#viz3dHardwareText"),
+      viz3dResultText: document.querySelector("#viz3dResultText"),
       legendCpu: document.querySelector("#legendCpu"),
       legendRam: document.querySelector("#legendRam"),
       legendAccel: document.querySelector("#legendAccel"),
@@ -2163,6 +2370,70 @@
     let activePhaseIndex = 0;
     let phaseTimer = 0;
     let phaseAutoPaused = false;
+    let viz3dView = "model";
+    let inference3d = null;
+    let inference3dImportStarted = false;
+    let viz3dMetrics = {
+      context: 4,
+      batch: 1,
+      kvGb: 0,
+      modelWorkGb: 0,
+      ramNeeded: 0,
+      vramCap: 16,
+      ramCap: 32,
+      vramPressure: 0,
+      ramPressure: 0,
+      flowScale: 1
+    };
+
+    const viz3dStories = {
+      transformer: {
+        lead: "Transformer 生成模型：把 prompt 切成 token，写入上下文表示，再循环预测下一个 token。",
+        beginner: "看懂 Transformer 的核心：它不是一次写完整段话，而是每次根据已有 token 和 KV cache 预测下一个 token。",
+        phases: [
+          ["请求进入", "prompt 先进入 CPU 控制面，服务端会做鉴权、排队和 batch 策略。", "此时还没有开始“思考”，主要是把请求送到合适的执行路径。"],
+          ["分词与张量", "文本被切成 token，并被整理成模型可以处理的张量、位置和 mask。", "token 是 Transformer 能理解的最小片段，后续每一步都围绕 token 展开。"],
+          ["Prefill 建上下文", "模型一次性处理已有 prompt，把每个 token 的上下文表示和 KV cache 写出来。", "长 prompt 首 token 慢，通常就是 prefill 计算和缓存写入在变重。"],
+          ["Decode 预测下一个 token", "模型读取权重和 KV cache，计算候选 token 的概率分布。", "每生成一个 token，KV cache 增长一格，上下文和并发都会推高内存预算。"],
+          ["采样与返回", "CPU 根据 logits 做采样、停止条件判断和流式输出，然后进入下一轮 decode。", "你看到的连续文本，本质上是很多次“下一个 token”串起来。"]
+        ]
+      },
+      cnn: {
+        lead: "CNN 判别模型：把图像变成局部特征图，再把特征组合成类别概率。",
+        beginner: "看懂 CNN 的核心：它不是直接知道数字，而是从边缘、弯曲和局部笔画中组合出分类判断。",
+        phases: [
+          ["图像进入", "图片、视频帧或传感器块先进入 CPU 和内存侧队列。", "以识别数字为例，原始像素先被送进推理流水线。"],
+          ["预处理成张量", "CPU 负责解码、缩放、归一化和 batch 拼接，把图像整理成输入张量。", "同一个数字如果尺寸、亮度和位置不同，预处理会先把它们拉到统一格式。"],
+          ["卷积提取特征", "卷积核像小窗口一样滑过图像，生成边缘、角点、笔画弯曲等特征图。", "这里是 CNN 的关键：数字 8 会逐层变成更抽象的局部形状组合。"],
+          ["分类头判断", "池化和分类头把特征图压缩成各类别概率，例如 0 到 9 的分数。", "最高分不一定永远正确，但它代表模型当前最相信的类别。"],
+          ["结果返回", "CPU 做 top-k、阈值过滤和业务格式化，把类别或异常判断返回。", "最终输出是“像数字 8 的概率最高”，而不是人工写死的规则。"]
+        ]
+      }
+    };
+
+    const viz3dHardwareNotes = {
+      "cpu-lpddr": [
+        "CPU-only 架构里，CPU 同时承担控制和主计算；LPDDR 是请求、权重、缓存和激活的统一数据池。",
+        "预处理和张量准备都在 CPU 上完成，LPDDR 负责承接输入、临时张量和模型工作集。",
+        "核心计算由 CPU 向量单元执行，瓶颈常落在 SIMD kernel、线程调度和 LPDDR 带宽。",
+        "Decode 或卷积阶段会反复从 LPDDR 读权重和缓存，容量与带宽会一起限制速度。",
+        "输出回到 CPU 做采样、分类后处理或流式返回，高并发会放大调度压力。"
+      ],
+      "npu-unified": [
+        "边缘 NPU 架构里，CPU 负责控制和后处理，NPU 执行可支持算子，LPDDR 被两者共享。",
+        "CPU 会把输入整理成 NPU runtime 可接受的张量，数据仍在统一 LPDDR 中排队和映射。",
+        "NPU 加速矩阵或卷积算子，但要看算子覆盖；LPDDR 带宽会影响 NPU 是否吃得饱。",
+        "KV cache 或特征图占用的是共享 LPDDR 预算，不是独立显存，长上下文或大 batch 会挤占空间。",
+        "结果回到 CPU 做采样、阈值和业务输出；算子回退时 CPU 压力会重新变高。"
+      ],
+      "dgpu-gddr": [
+        "独显架构里，CPU 和 LPDDR 负责入口流水线，GPU 执行主算子，GDDR 承载权重、KV cache 或特征图。",
+        "CPU 完成分词或图像预处理后，把必要张量提交到 GPU；LPDDR 主要是系统侧缓冲。",
+        "Prefill、decode 或卷积主干在 GPU 上跑，GDDR 带宽和显存容量决定核心吞吐边界。",
+        "模型工作集主要常驻 GDDR，KV cache 或特征图峰值会决定上下文、batch 和并发上限。",
+        "logits 或分类结果回到 CPU，CPU 做采样、top-k、阈值和流式输出。"
+      ]
+    };
 
     function fmt(value) {
       if (value >= 100) return Math.round(value).toString();
@@ -2253,6 +2524,709 @@
       } else if (value > range.max) {
         element.value = range.max;
       }
+    }
+
+    function activeVizStory() {
+      const story = viz3dStories[currentModelKey] || viz3dStories.transformer;
+      return story.phases[activePhaseIndex] || story.phases[0];
+    }
+
+    function updateVizPlaybackButton() {
+      const button = document.querySelector("[data-viz-action='toggle']");
+      if (button) {
+        button.textContent = phaseTimer && !phaseAutoPaused ? "暂停" : "播放";
+      }
+    }
+
+    function updateViz3dText() {
+      if (!refs.viz3dLead) {
+        return;
+      }
+      const story = viz3dStories[currentModelKey] || viz3dStories.transformer;
+      const phaseStory = activeVizStory();
+      const hardwareNotes = viz3dHardwareNotes[currentArchKey] || viz3dHardwareNotes["cpu-lpddr"];
+      const hardwareText = hardwareNotes[activePhaseIndex] || hardwareNotes[0];
+      refs.viz3dLead.textContent = story.lead;
+      refs.viz3dPhaseTitle.textContent = phaseStory[0];
+      refs.viz3dPhaseText.textContent = phaseStory[1];
+      refs.viz3dHardwareText.textContent = hardwareText;
+      refs.viz3dResultText.textContent = phaseStory[2] || story.beginner;
+    }
+
+    function renderViz3dFallback() {
+      if (!refs.viz3dStage || inference3d) {
+        return;
+      }
+      const arch = currentArchitectures()[currentArchKey];
+      refs.viz3dStage.innerHTML = `
+        <div class="viz3d-fallback" aria-label="3D fallback">
+          <span style="--node-color: var(--cpu)">CPU<br>${arch.labels.cpu}</span>
+          <span style="--node-color: var(--ram)">${arch.labels.ram}<br>数据池</span>
+          <span style="--node-color: var(--accel)">${arch.labels.accel}<br>主计算</span>
+          <span style="--node-color: var(--vram)">${arch.labels.vram}<br>预算边界</span>
+        </div>`;
+    }
+
+    function syncInference3d() {
+      updateViz3dText();
+      if (inference3d) {
+        inference3d.sync({
+          modelKey: currentModelKey,
+          archKey: currentArchKey,
+          arch: currentArchitectures()[currentArchKey],
+          phaseIndex: activePhaseIndex,
+          view: viz3dView,
+          metrics: viz3dMetrics,
+          labels: {
+            weight: refs.weightGb ? refs.weightGb.textContent : "",
+            work: refs.totalVramGb ? refs.totalVramGb.textContent : "",
+            ram: refs.ramGb ? refs.ramGb.textContent : ""
+          }
+        });
+      } else if (inference3dImportStarted && refs.viz3dStage?.querySelector(".viz3d-fallback")) {
+        renderViz3dFallback();
+      }
+    }
+
+    function bootInference3d() {
+      if (inference3dImportStarted || !refs.viz3dStage) {
+        return;
+      }
+      inference3dImportStarted = true;
+      const fallbackTimer = window.setTimeout(() => {
+        if (!inference3d) {
+          if (refs.viz3dLoading) {
+            refs.viz3dLoading.textContent = "3D 舞台加载较慢，先显示轻量舞台";
+          }
+          renderViz3dFallback();
+          updateViz3dText();
+        }
+      }, 3500);
+      import("https://unpkg.com/three@0.160.0/build/three.module.js")
+        .then((THREE) => {
+          window.clearTimeout(fallbackTimer);
+          inference3d = createInference3d(THREE, refs.viz3dStage);
+          syncInference3d();
+        })
+        .catch(() => {
+          window.clearTimeout(fallbackTimer);
+          if (refs.viz3dLoading) {
+            refs.viz3dLoading.textContent = "3D 库加载失败，已切换为轻量舞台";
+          }
+          renderViz3dFallback();
+          updateViz3dText();
+        });
+    }
+
+    function createInference3d(THREE, stage) {
+      const colors = {
+        cpu: 0xdf5a45,
+        ram: 0x0f8b8d,
+        accel: 0x7650bd,
+        vram: 0xc58a16,
+        ok: 0x22815c,
+        warn: 0xb77413,
+        risk: 0xc9483a,
+        ink: 0x13201e,
+        muted: 0x6c7b75,
+        surface: 0xffffff,
+        grid: 0xd8e3de
+      };
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      const root = new THREE.Group();
+      const hardwareGroup = new THREE.Group();
+      const modelGroup = new THREE.Group();
+      const attentionGroup = new THREE.Group();
+      const clock = new THREE.Clock();
+      let currentSceneKey = "";
+      let activePath = [];
+      let pathLine = null;
+      let hardwareNodes = {};
+      let modelParts = [];
+      let modelPoints = {};
+      let modelExtras = {};
+      let particleColor = colors.ram;
+      let flowScale = 1;
+      let currentContext = null;
+      let dragStart = null;
+      let rootStartY = 0;
+
+      renderer.setClearColor(0x000000, 0);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+      stage.innerHTML = "";
+      stage.appendChild(renderer.domElement);
+
+      scene.add(root);
+      root.add(hardwareGroup);
+      root.add(modelGroup);
+      root.add(attentionGroup);
+
+      const ambient = new THREE.HemisphereLight(0xffffff, 0xd8e3de, 1.8);
+      const key = new THREE.DirectionalLight(0xffffff, 2.5);
+      key.position.set(4, 7, 6);
+      scene.add(ambient, key);
+
+      const grid = new THREE.GridHelper(8.5, 18, colors.grid, colors.grid);
+      grid.position.y = -0.04;
+      grid.material.transparent = true;
+      grid.material.opacity = 0.48;
+      root.add(grid);
+
+      const particleMaterial = new THREE.MeshStandardMaterial({
+        color: particleColor,
+        emissive: particleColor,
+        emissiveIntensity: 0.26,
+        roughness: 0.35
+      });
+      const particles = Array.from({ length: 12 }, (_, index) => {
+        const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.07, 16, 16), particleMaterial.clone());
+        mesh.userData.offset = index / 12;
+        mesh.visible = false;
+        root.add(mesh);
+        return mesh;
+      });
+
+      function makeLabel(text, color = colors.ink) {
+        const canvas = document.createElement("canvas");
+        canvas.width = 512;
+        canvas.height = 128;
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.88)";
+        ctx.strokeStyle = "rgba(216, 227, 222, 0.96)";
+        ctx.lineWidth = 6;
+        roundRect(ctx, 8, 16, 496, 96, 18);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = `#${color.toString(16).padStart(6, "0")}`;
+        ctx.font = "700 38px Microsoft YaHei, Segoe UI, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(text, 256, 64);
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true }));
+        sprite.scale.set(1.9, 0.48, 1);
+        return sprite;
+      }
+
+      function roundRect(ctx, x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+      }
+
+      function clearGroup(group) {
+        while (group.children.length) {
+          const child = group.children[0];
+          group.remove(child);
+          child.traverse((item) => {
+            if (item.geometry) item.geometry.dispose();
+            if (item.material) {
+              if (Array.isArray(item.material)) {
+                item.material.forEach((mat) => {
+                  if (mat.map) mat.map.dispose();
+                  mat.dispose();
+                });
+              } else {
+                if (item.material.map) item.material.map.dispose();
+                item.material.dispose();
+              }
+            }
+          });
+        }
+      }
+
+      function nodeBox(kind, label, position, size) {
+        const geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+        const material = new THREE.MeshStandardMaterial({
+          color: colors[kind],
+          emissive: 0x000000,
+          roughness: 0.52,
+          metalness: 0.08,
+          transparent: true,
+          opacity: 0.9
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.copy(position);
+        mesh.userData.kind = kind;
+        const edges = new THREE.LineSegments(
+          new THREE.EdgesGeometry(geometry),
+          new THREE.LineBasicMaterial({ color: colors.ink, transparent: true, opacity: 0.22 })
+        );
+        mesh.add(edges);
+        const labelSprite = makeLabel(label, colors[kind]);
+        labelSprite.position.set(position.x, position.y + size.y * 0.75 + 0.24, position.z);
+        hardwareGroup.add(mesh, labelSprite);
+        hardwareNodes[kind] = { mesh, material, base: mesh.scale.clone(), position: position.clone(), baseColor: colors[kind] };
+      }
+
+      function modelBox(tag, color, position, size, opacity = 0.82) {
+        const mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(size.x, size.y, size.z),
+          new THREE.MeshStandardMaterial({
+            color,
+            emissive: 0x000000,
+            roughness: 0.48,
+            metalness: 0.04,
+            transparent: true,
+            opacity
+          })
+        );
+        mesh.position.copy(position);
+        mesh.userData.tag = tag;
+        modelGroup.add(mesh);
+        modelParts.push(mesh);
+        return mesh;
+      }
+
+      function bar(tag, color, x, height, z) {
+        const mesh = modelBox(tag, color, new THREE.Vector3(x, height / 2, z), new THREE.Vector3(0.18, height, 0.18), 0.9);
+        mesh.userData.baseHeight = height;
+        return mesh;
+      }
+
+      function connection(points, color, opacity = 0.42) {
+        const line = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints(points),
+          new THREE.LineBasicMaterial({ color, transparent: true, opacity })
+        );
+        attentionGroup.add(line);
+        return line;
+      }
+
+      function setBarHeight(mesh, height) {
+        mesh.userData.currentHeight = height;
+        mesh.scale.y = height / mesh.userData.baseHeight;
+        mesh.position.y = height / 2;
+      }
+
+      function metricValue(value, fallback = 0) {
+        return Number.isFinite(Number(value)) ? Number(value) : fallback;
+      }
+
+      function buildHardware(archKey, arch) {
+        hardwareNodes = {};
+        clearGroup(hardwareGroup);
+        if (archKey === "dgpu-gddr") {
+          nodeBox("cpu", "CPU", new THREE.Vector3(-3.35, 0.34, 0.7), new THREE.Vector3(1.18, 0.68, 1.0));
+          nodeBox("ram", arch.labels.ram, new THREE.Vector3(-1.55, 0.25, -1.55), new THREE.Vector3(1.35, 0.5, 0.95));
+          nodeBox("accel", arch.labels.accel, new THREE.Vector3(2.65, 0.38, 0.7), new THREE.Vector3(1.45, 0.76, 1.08));
+          nodeBox("vram", arch.labels.vram, new THREE.Vector3(2.65, 0.28, -1.55), new THREE.Vector3(1.7, 0.56, 1.0));
+        } else if (archKey === "npu-unified") {
+          nodeBox("cpu", "CPU", new THREE.Vector3(-3.25, 0.34, 0.75), new THREE.Vector3(1.12, 0.68, 1.0));
+          nodeBox("ram", arch.labels.ram, new THREE.Vector3(-0.3, 0.27, -1.55), new THREE.Vector3(2.4, 0.54, 1.04));
+          nodeBox("accel", arch.labels.accel, new THREE.Vector3(2.75, 0.36, 0.75), new THREE.Vector3(1.35, 0.72, 1.06));
+          nodeBox("vram", arch.labels.vram, new THREE.Vector3(2.0, 0.2, -1.55), new THREE.Vector3(1.25, 0.4, 0.86));
+        } else {
+          nodeBox("cpu", "CPU", new THREE.Vector3(-3.15, 0.34, 0.72), new THREE.Vector3(1.22, 0.68, 1.0));
+          nodeBox("ram", arch.labels.ram, new THREE.Vector3(-0.15, 0.3, -1.55), new THREE.Vector3(2.55, 0.6, 1.08));
+          nodeBox("accel", arch.labels.accel, new THREE.Vector3(-2.95, 0.35, 1.95), new THREE.Vector3(1.4, 0.7, 0.82));
+          nodeBox("vram", arch.labels.vram, new THREE.Vector3(1.9, 0.22, -1.55), new THREE.Vector3(1.35, 0.44, 0.86));
+        }
+      }
+
+      function buildTransformerModel() {
+        clearGroup(modelGroup);
+        clearGroup(attentionGroup);
+        modelParts = [];
+        modelExtras = { kvSlots: [], probBars: [], attentionLines: [], tokenMeshes: [] };
+        modelPoints = {
+          input: new THREE.Vector3(-1.75, 0.82, 1.55),
+          prep: new THREE.Vector3(-0.65, 0.82, 1.25),
+          core: new THREE.Vector3(0.25, 1.0, 0.25),
+          memory: new THREE.Vector3(1.55, 0.72, 1.35),
+          output: new THREE.Vector3(0.85, 0.82, -1.2)
+        };
+        ["我", "喜欢", "学习"].forEach((token, index) => {
+          const mesh = modelBox("input", colors.cpu, new THREE.Vector3(-2.2 + index * 0.45, 0.6, 1.55), new THREE.Vector3(0.34, 0.34, 0.34), 0.86);
+          modelExtras.tokenMeshes.push(mesh);
+          const label = makeLabel(token, colors.cpu);
+          label.scale.set(0.62, 0.16, 1);
+          label.position.set(mesh.position.x, 1.02, mesh.position.z);
+          modelGroup.add(label);
+        });
+        for (let i = 0; i < 5; i += 1) {
+          modelBox("core", colors.accel, new THREE.Vector3(-0.1 + i * 0.18, 0.56 + i * 0.14, 0.28), new THREE.Vector3(1.35, 0.08, 1.05), 0.58);
+        }
+        for (let i = 0; i < 14; i += 1) {
+          const slot = modelBox("memory", colors.vram, new THREE.Vector3(0.72 + i * 0.13, 0.42, 1.34), new THREE.Vector3(0.09, 0.3 + i * 0.012, 0.26), 0.82);
+          slot.userData.baseColor = colors.vram;
+          slot.userData.slotIndex = i;
+          modelExtras.kvSlots.push(slot);
+        }
+        ["AI", "数学", "编程", "音乐"].forEach((token, index) => {
+          const prob = bar("output", index === 2 ? colors.ok : colors.vram, 0.35 + index * 0.25, [0.32, 0.44, 0.86, 0.28][index], -1.22);
+          prob.userData.baseColor = index === 2 ? colors.ok : colors.vram;
+          prob.userData.baseHeight = [0.32, 0.44, 0.86, 0.28][index];
+          modelExtras.probBars.push(prob);
+          const label = makeLabel(token, index === 2 ? colors.ok : colors.vram);
+          label.scale.set(0.46, 0.12, 1);
+          label.position.set(prob.position.x, 0.12, -1.55);
+          modelGroup.add(label);
+        });
+        const next = makeLabel("下一个 token", colors.vram);
+        next.scale.set(1.2, 0.3, 1);
+        next.position.set(0.8, 1.25, -1.22);
+        modelGroup.add(next);
+        modelExtras.tokenMeshes.forEach((tokenMesh, index) => {
+          const end = new THREE.Vector3(0.1 + index * 0.16, 1.08, 0.35);
+          modelExtras.attentionLines.push(connection([tokenMesh.position.clone(), end], colors.accel, 0.34));
+        });
+        modelExtras.attentionLines.push(connection([
+          new THREE.Vector3(-1.95, 0.92, 1.55),
+          new THREE.Vector3(-1.5, 1.15, 1.55),
+          new THREE.Vector3(-1.05, 0.92, 1.55)
+        ], colors.accel, 0.28));
+      }
+
+      function buildCnnModel() {
+        clearGroup(modelGroup);
+        clearGroup(attentionGroup);
+        modelParts = [];
+        modelExtras = { cnnKernel: null, probBars: [], featurePlanes: [], digitPixels: [] };
+        modelPoints = {
+          input: new THREE.Vector3(-1.9, 0.72, 1.35),
+          prep: new THREE.Vector3(-1.1, 0.72, 1.1),
+          core: new THREE.Vector3(-0.05, 0.85, 0.25),
+          memory: new THREE.Vector3(1.05, 0.72, 0.55),
+          output: new THREE.Vector3(1.7, 0.86, -1.12)
+        };
+        for (let row = 0; row < 6; row += 1) {
+          for (let col = 0; col < 6; col += 1) {
+            const stroke = (col === 2 || col === 3 || (row > 0 && row < 5 && (col === 1 || col === 4)));
+            const pixel = modelBox("input", stroke ? colors.cpu : 0xd8e3de, new THREE.Vector3(-2.25 + col * 0.14, 0.36 + row * 0.07, 1.35), new THREE.Vector3(0.1, 0.05, 0.1), stroke ? 0.92 : 0.5);
+            modelExtras.digitPixels.push(pixel);
+          }
+        }
+        const kernel = modelBox("core", colors.accel, new THREE.Vector3(-0.85, 0.67, 0.88), new THREE.Vector3(0.62, 0.06, 0.62), 0.42);
+        kernel.rotation.y = -0.1;
+        kernel.userData.baseColor = colors.accel;
+        modelExtras.cnnKernel = kernel;
+        for (let i = 0; i < 4; i += 1) {
+          const plane = modelBox("memory", colors.ram, new THREE.Vector3(0.45 + i * 0.22, 0.52 + i * 0.05, 0.45 - i * 0.05), new THREE.Vector3(0.78, 0.04, 0.58), 0.5);
+          plane.rotation.y = 0.18;
+          plane.userData.baseY = plane.position.y;
+          modelExtras.featurePlanes.push(plane);
+        }
+        const cnnProbs = [0.14, 0.2, 0.08, 0.12, 0.16, 0.18, 0.1, 0.24, 0.96, 0.34];
+        Array.from({ length: 10 }, (_, index) => String(index)).forEach((digit, index) => {
+          const x = 0.83 + index * 0.17;
+          const digitColor = digit === "8" ? colors.ok : colors.vram;
+          const prob = bar("output", digitColor, x, cnnProbs[index], -1.14);
+          prob.userData.baseColor = digitColor;
+          prob.userData.baseHeight = cnnProbs[index];
+          modelExtras.probBars.push(prob);
+          const label = makeLabel(digit, digitColor);
+          label.scale.set(0.32, 0.08, 1);
+          label.position.set(x, 0.09, -1.48);
+          modelGroup.add(label);
+        });
+        const result = makeLabel("识别结果：8", 0x22815c);
+        result.scale.set(1.15, 0.3, 1);
+        result.position.set(1.62, 1.28, -1.14);
+        modelGroup.add(result);
+      }
+
+      function buildScene(context) {
+        currentSceneKey = `${context.modelKey}:${context.archKey}`;
+        buildHardware(context.archKey, context.arch);
+        if (context.modelKey === "cnn") buildCnnModel();
+        else buildTransformerModel();
+      }
+
+      function pointFor(name) {
+        if (hardwareNodes[name]) return hardwareNodes[name].position.clone().add(new THREE.Vector3(0, 0.55, 0));
+        if (modelPoints[name]) return modelPoints[name].clone();
+        return new THREE.Vector3();
+      }
+
+      function pathFor(context) {
+        const archKey = context.archKey;
+        const phase = context.phaseIndex;
+        const mainMemory = archKey === "dgpu-gddr" ? "vram" : "ram";
+        const budget = archKey === "cpu-lpddr" ? "ram" : "vram";
+        if (phase === 0) return ["cpu", "ram", "input"];
+        if (phase === 1) return ["cpu", "prep", "ram"];
+        if (phase === 2) return ["ram", "accel", "core", budget, "memory"];
+        if (phase === 3) return context.modelKey === "cnn"
+          ? [mainMemory, "accel", "memory", "output"]
+          : [budget, "accel", "core", "memory", budget];
+        return ["output", "cpu", "ram"];
+      }
+
+      function setActivePath(context) {
+        const keys = pathFor(context);
+        activePath = keys.map((key) => pointFor(key));
+        flowScale = metricValue(context.metrics?.flowScale, 1);
+        const activeKind = context.arch.phases[context.phaseIndex].chips[0]?.[0] || "ram";
+        particleColor = colors[activeKind] || colors.ram;
+        particles.forEach((particle) => {
+          particle.visible = activePath.length > 1;
+          particle.material.color.setHex(particleColor);
+          particle.material.emissive.setHex(particleColor);
+          particle.scale.setScalar(0.75 + flowScale * 0.24);
+        });
+        if (pathLine) {
+          root.remove(pathLine);
+          pathLine.geometry.dispose();
+          pathLine.material.dispose();
+        }
+        if (activePath.length > 1) {
+          const curve = new THREE.CatmullRomCurve3(activePath);
+          pathLine = new THREE.Mesh(
+            new THREE.TubeGeometry(curve, 48, 0.018 + flowScale * 0.018, 8, false),
+            new THREE.MeshBasicMaterial({ color: particleColor, transparent: true, opacity: 0.36 + Math.min(flowScale, 3) * 0.12 })
+          );
+          root.add(pathLine);
+        }
+      }
+
+      function applyHighlights(context) {
+        const activeKinds = new Set(context.arch.phases[context.phaseIndex].chips.map(([kind]) => kind));
+        Object.entries(hardwareNodes).forEach(([kind, node]) => {
+          const isActive = activeKinds.has(kind);
+          node.mesh.scale.setScalar(isActive ? 1.12 : 1);
+          node.material.emissive.setHex(isActive ? colors[kind] : 0x000000);
+          node.material.emissiveIntensity = isActive ? 0.22 : 0;
+          node.material.opacity = isActive ? 0.98 : 0.82;
+        });
+        const activeModelTags = context.modelKey === "cnn"
+          ? [["input"], ["input"], ["core", "memory"], ["memory", "output"], ["output"]][context.phaseIndex]
+          : [["input"], ["input"], ["core", "memory"], ["core", "memory", "output"], ["output"]][context.phaseIndex];
+        const tags = new Set(activeModelTags || []);
+        modelParts.forEach((part) => {
+          const isActive = tags.has(part.userData.tag);
+          part.scale.setScalar(isActive ? 1.14 : 1);
+          part.material.emissive.setHex(isActive ? part.material.color.getHex() : 0x000000);
+          part.material.emissiveIntensity = isActive ? 0.24 : 0;
+          part.material.opacity = isActive ? 0.94 : 0.5;
+        });
+      }
+
+      function applyMetricState(context) {
+        const metrics = context.metrics || {};
+        const ramPressure = metricValue(metrics.ramPressure, 0);
+        const vramPressure = metricValue(metrics.vramPressure, 0);
+        const contextValue = metricValue(metrics.context, context.modelKey === "cnn" ? 224 : 4);
+        const batchValue = metricValue(metrics.batch, 1);
+        const contextMax = context.modelKey === "cnn" ? 1024 : 128;
+        const contextMin = context.modelKey === "cnn" ? 128 : 4;
+        const contextRatio = Math.max(0, Math.min(1, (contextValue - contextMin) / (contextMax - contextMin)));
+        const batchRatio = Math.max(0, Math.min(1, Math.log2(batchValue + 1) / (context.modelKey === "cnn" ? 6 : 4.2)));
+
+        [
+          ["ram", ramPressure],
+          ["vram", vramPressure]
+        ].forEach(([kind, pressure]) => {
+          const node = hardwareNodes[kind];
+          if (!node) return;
+          const nextColor = pressure >= 100 ? colors.risk : pressure >= 85 ? colors.warn : node.baseColor;
+          const baseY = node.mesh.scale.x;
+          node.material.color.setHex(nextColor);
+          node.material.opacity = pressure >= 100 ? 1 : node.material.opacity;
+          node.mesh.scale.y = pressure >= 100 ? baseY * 1.18 : pressure >= 85 ? baseY * 1.1 : baseY;
+        });
+
+        if (context.modelKey === "transformer") {
+          const visibleSlots = Math.max(3, Math.min(modelExtras.kvSlots?.length || 0, Math.round(3 + contextRatio * 11)));
+          (modelExtras.kvSlots || []).forEach((slot, index) => {
+            const visible = index < visibleSlots;
+            slot.visible = visible;
+            slot.material.opacity = visible ? (index >= visibleSlots - 2 ? 0.96 : 0.74) : 0.12;
+            slot.material.color.setHex(vramPressure >= 100 && visible ? colors.risk : vramPressure >= 85 && visible ? colors.warn : slot.userData.baseColor);
+            slot.scale.y = visible ? 1 + batchRatio * 0.38 + index * 0.01 : 0.6;
+          });
+          (modelExtras.attentionLines || []).forEach((line, index) => {
+            const active = context.phaseIndex === 2 || context.phaseIndex === 3;
+            line.visible = active || context.view === "model";
+            line.material.opacity = active ? 0.42 + batchRatio * 0.22 : 0.16;
+            line.material.color.setHex(context.phaseIndex === 3 ? colors.vram : colors.accel);
+          });
+          const base = [0.28, 0.38, 0.82, 0.25];
+          (modelExtras.probBars || []).forEach((barMesh, index) => {
+            const phaseBoost = context.phaseIndex >= 3 ? 0.18 : 0;
+            const nextHeight = Math.max(0.18, base[index] + phaseBoost * (index === 2 ? 1 : -0.25) + batchRatio * 0.05);
+            setBarHeight(barMesh, nextHeight);
+            barMesh.userData.metricHeight = nextHeight;
+            barMesh.material.color.setHex(index === 2 ? colors.ok : colors.vram);
+          });
+        } else {
+          (modelExtras.featurePlanes || []).forEach((plane, index) => {
+            plane.scale.set(1 + contextRatio * 0.24, 1, 1 + batchRatio * 0.28);
+            plane.material.opacity = 0.42 + contextRatio * 0.18 + index * 0.04;
+            plane.material.color.setHex(vramPressure >= 100 ? colors.risk : colors.ram);
+          });
+          const cnnBase = [0.14, 0.2, 0.08, 0.12, 0.16, 0.18, 0.1, 0.24, 0.96, 0.34];
+          (modelExtras.probBars || []).forEach((barMesh, index) => {
+            const confidence = index === 8 ? 0.96 + Math.min(0.08, contextRatio * 0.08) : cnnBase[index] * (1 + batchRatio * 0.08);
+            const nextHeight = Math.min(1.08, confidence);
+            setBarHeight(barMesh, nextHeight);
+            barMesh.userData.metricHeight = nextHeight;
+            barMesh.material.color.setHex(index === 8 ? colors.ok : colors.vram);
+          });
+          if (modelExtras.cnnKernel) {
+            modelExtras.cnnKernel.material.color.setHex(context.phaseIndex === 2 ? colors.accel : colors.warn);
+            modelExtras.cnnKernel.material.opacity = context.phaseIndex === 2 ? 0.58 : 0.34;
+          }
+        }
+      }
+
+      function setCamera(view) {
+        if (view === "hardware") {
+          camera.position.set(0, 6.1, 7.2);
+          root.rotation.set(-0.08, -0.08, 0);
+        } else {
+          camera.position.set(4.6, 4.2, 6.6);
+          root.rotation.set(-0.02, -0.42, 0);
+        }
+        camera.lookAt(0, 0.45, 0);
+      }
+
+      function sync(context) {
+        currentContext = context;
+        const sceneKey = `${context.modelKey}:${context.archKey}`;
+        if (sceneKey !== currentSceneKey) {
+          buildScene(context);
+        }
+        setCamera(context.view);
+        applyHighlights(context);
+        applyMetricState(context);
+        setActivePath(context);
+      }
+
+      function pathPoint(t) {
+        if (activePath.length === 0) return new THREE.Vector3();
+        if (activePath.length === 1) return activePath[0].clone();
+        const segments = [];
+        let total = 0;
+        for (let i = 0; i < activePath.length - 1; i += 1) {
+          const length = activePath[i].distanceTo(activePath[i + 1]);
+          segments.push(length);
+          total += length;
+        }
+        let distance = t * total;
+        for (let i = 0; i < segments.length; i += 1) {
+          if (distance <= segments[i]) {
+            return activePath[i].clone().lerp(activePath[i + 1], distance / segments[i]);
+          }
+          distance -= segments[i];
+        }
+        return activePath[activePath.length - 1].clone();
+      }
+
+      function resize() {
+        const rect = stage.getBoundingClientRect();
+        const width = Math.max(320, rect.width);
+        const height = Math.max(320, rect.height);
+        renderer.setSize(width, height, false);
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+      }
+
+      function animateModelDetails(elapsed) {
+        if (!currentContext) {
+          return;
+        }
+        if (currentContext.modelKey === "cnn") {
+          const activeConvolution = currentContext.phaseIndex === 2;
+          if (modelExtras.cnnKernel) {
+            const scanSteps = 16;
+            const scanIndex = Math.floor((elapsed * (activeConvolution ? 4.5 : 1.3)) % scanSteps);
+            const col = scanIndex % 4;
+            const row = Math.floor(scanIndex / 4);
+            const target = new THREE.Vector3(-2.08 + col * 0.16, 0.56 + row * 0.07, 1.35);
+            modelExtras.cnnKernel.position.lerp(target, 0.22);
+            modelExtras.cnnKernel.rotation.z = Math.sin(elapsed * 2.2) * 0.06;
+          }
+          (modelExtras.featurePlanes || []).forEach((plane, index) => {
+            plane.position.y = (plane.userData.baseY || 0.52) + Math.sin(elapsed * 2.2 + index) * 0.018;
+          });
+          if (currentContext.phaseIndex >= 3) {
+            (modelExtras.probBars || []).forEach((barMesh, index) => {
+              const baseHeight = barMesh.userData.metricHeight || barMesh.userData.baseHeight;
+              const pulse = index === 8 ? Math.sin(elapsed * 4) * 0.04 : Math.sin(elapsed * 2 + index) * 0.012;
+              setBarHeight(barMesh, Math.max(0.08, baseHeight + pulse));
+            });
+          }
+        } else {
+          const attentionActive = currentContext.phaseIndex === 2 || currentContext.phaseIndex === 3;
+          (modelExtras.attentionLines || []).forEach((line, index) => {
+            if (line.material) {
+              line.material.opacity = attentionActive ? 0.34 + Math.sin(elapsed * 3.2 + index) * 0.12 : 0.14;
+            }
+          });
+          if (attentionActive) {
+            (modelExtras.kvSlots || []).forEach((slot, index) => {
+              if (!slot.visible) return;
+              const wave = Math.sin(elapsed * 3 + index * 0.55) * 0.018;
+              slot.position.y = 0.42 + wave;
+            });
+          }
+          if (currentContext.phaseIndex >= 3) {
+            (modelExtras.probBars || []).forEach((barMesh, index) => {
+              const baseHeight = barMesh.userData.metricHeight || barMesh.userData.baseHeight;
+              const pulse = index === 2 ? Math.sin(elapsed * 4.4) * 0.035 : Math.sin(elapsed * 2.1 + index) * 0.01;
+              setBarHeight(barMesh, Math.max(0.1, baseHeight + pulse));
+            });
+          }
+        }
+      }
+
+      function animate() {
+        const elapsed = clock.getElapsedTime();
+        particles.forEach((particle) => {
+          const t = (elapsed * 0.28 + particle.userData.offset) % 1;
+          particle.position.copy(pathPoint(t));
+          particle.position.y += Math.sin((elapsed + particle.userData.offset) * Math.PI * 2) * 0.03;
+        });
+        animateModelDetails(elapsed);
+        if (!dragStart) {
+          modelGroup.rotation.y = Math.sin(elapsed * 0.32) * 0.04;
+        }
+        renderer.render(scene, camera);
+        window.requestAnimationFrame(animate);
+      }
+
+      stage.addEventListener("pointerdown", (event) => {
+        dragStart = event.clientX;
+        rootStartY = root.rotation.y;
+        stage.setPointerCapture(event.pointerId);
+      });
+      stage.addEventListener("pointermove", (event) => {
+        if (dragStart === null) return;
+        root.rotation.y = rootStartY + (event.clientX - dragStart) * 0.006;
+      });
+      stage.addEventListener("pointerup", (event) => {
+        dragStart = null;
+        if (stage.hasPointerCapture(event.pointerId)) {
+          stage.releasePointerCapture(event.pointerId);
+        }
+      });
+      stage.addEventListener("pointercancel", () => {
+        dragStart = null;
+      });
+
+      if ("ResizeObserver" in window) {
+        new ResizeObserver(resize).observe(stage);
+      } else {
+        window.addEventListener("resize", resize);
+      }
+      resize();
+      setCamera("model");
+      animate();
+
+      return { sync };
     }
 
     function applyModelControls(model) {
@@ -2385,6 +3359,7 @@
       if (manual) {
         stopPhaseRotation();
       }
+      syncInference3d();
     }
 
     function stopPhaseRotation() {
@@ -2393,6 +3368,7 @@
         window.clearInterval(phaseTimer);
         phaseTimer = 0;
       }
+      updateVizPlaybackButton();
     }
 
     function startPhaseRotation() {
@@ -2405,6 +3381,7 @@
           setActivePhase(activePhaseIndex + 1);
         }
       }, 1800);
+      updateVizPlaybackButton();
     }
 
     function activeQuant(bits, shouldUpdate = true) {
@@ -2557,6 +3534,21 @@
       const ramPressure = ramNeeded / ramCap * 100;
       const accelPressure = Math.max(effectiveTops / compute.referenceTops * 100, bandwidthGbps / compute.referenceBandwidth * 100);
       const vramPressure = modelWorkGb / vramCap * 100;
+      const flowScale = currentModelKey === "cnn"
+        ? Math.min(3.2, Math.max(1, Math.sqrt(Number(refs.concurrency.value)) * 0.58))
+        : Math.min(3.2, Math.max(1, Math.sqrt(Number(refs.concurrency.value)) * 0.72));
+      viz3dMetrics = {
+        context: Number(refs.contextTokens.value),
+        batch: Number(refs.concurrency.value),
+        kvGb,
+        modelWorkGb,
+        ramNeeded,
+        vramCap,
+        ramCap,
+        vramPressure,
+        ramPressure,
+        flowScale
+      };
 
       refs.vramCapOut.textContent = `${vramCap} GB`;
       refs.ramCapOut.textContent = `${ramCap} GB`;
@@ -2597,6 +3589,7 @@
       refs.bottleneck.innerHTML = `<strong>瓶颈预测：${candidates.name} ${state}</strong>${detail}`;
       refs.bottleneck.style.borderLeftColor = candidates.value >= 100 ? "var(--risk)" : candidates.value >= 85 ? "var(--warn)" : "var(--ok)";
       refs.bottleneck.style.background = candidates.value >= 100 ? "#fff4f2" : candidates.value >= 85 ? "#fffaf0" : "#f2faf6";
+      syncInference3d();
     }
 
     document.querySelectorAll("[data-quant]").forEach((button) => {
@@ -2654,6 +3647,30 @@
       });
     });
 
+    document.querySelectorAll("[data-viz-view]").forEach((button) => {
+      button.addEventListener("click", () => {
+        viz3dView = button.dataset.vizView;
+        document.querySelectorAll("[data-viz-view]").forEach((viewButton) => {
+          viewButton.classList.toggle("is-active", viewButton === button);
+        });
+        syncInference3d();
+      });
+    });
+
+    document.querySelectorAll("[data-viz-action]").forEach((button) => {
+      button.addEventListener("click", () => {
+        if (button.dataset.vizAction === "step") {
+          setActivePhase(activePhaseIndex + 1, true);
+          return;
+        }
+        if (phaseTimer && !phaseAutoPaused) {
+          stopPhaseRotation();
+        } else {
+          startPhaseRotation();
+        }
+      });
+    });
+
     [refs.modelParams, refs.modelLayers, refs.kvHeads, refs.headDim, refs.contextTokens, refs.concurrency, refs.targetTps, refs.vramCap, refs.ramCap, refs.kv8].forEach((element) => {
       element.addEventListener("input", () => {
         document.querySelectorAll("[data-scenario]").forEach((button) => button.classList.remove("is-active"));
@@ -2664,6 +3681,7 @@
     applyModelControls(currentModel());
     applyScenario(currentModel().defaultScenario, false);
     renderArchitecture();
+    bootInference3d();
     startPhaseRotation();
   </script>
 </body>
